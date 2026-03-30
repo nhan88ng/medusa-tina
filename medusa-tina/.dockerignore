@@ -1,0 +1,10 @@
+node_modules
+.medusa
+.env
+.env.*
+!.env.template
+dist
+.git
+.gitignore
+*.md
+integration-tests
