@@ -6,7 +6,7 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-RUN NODE_OPTIONS=--max-old-space-size=4096 npm run build
+RUN DISABLE_ADMIN=true NODE_OPTIONS=--max-old-space-size=2048 npm run build
 
 FROM node:20-alpine
 
