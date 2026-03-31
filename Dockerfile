@@ -20,4 +20,4 @@ COPY --from=builder /app/.medusa/server .
 
 EXPOSE 9000
 
-CMD ["npm", "run", "start"]
+CMD ["sh", "-c", "npx medusa db:migrate && npm run start"]
