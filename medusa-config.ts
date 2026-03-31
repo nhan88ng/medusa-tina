@@ -8,6 +8,9 @@ module.exports = defineConfig({
   },
   projectConfig: {
     databaseUrl: process.env.DATABASE_URL,
+    databaseDriverOptions: process.env.DATABASE_SSL === "false" ? {} : {
+      ssl: { rejectUnauthorized: false },
+    },
     http: {
       storeCors: process.env.STORE_CORS!,
       adminCors: process.env.ADMIN_CORS!,
