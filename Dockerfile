@@ -6,7 +6,7 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-RUN DISABLE_ADMIN=true NODE_OPTIONS=--max-old-space-size=2048 npm run build
+RUN NODE_OPTIONS=--max-old-space-size=2048 npm run build
 RUN ls -la .medusa/server/
 
 FROM node:20-alpine
