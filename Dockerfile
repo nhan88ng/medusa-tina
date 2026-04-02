@@ -18,6 +18,8 @@ RUN npm ci --omit=dev
 
 COPY --from=builder /app/.medusa/server .
 
+ENV SEED_ON_START=false
+
 EXPOSE 9000
 
-CMD ["sh", "-c", "npx medusa db:migrate && npm run start"]
+CMD ["sh", "-c", "npx medusa db:migrate && if [ \"$SEED_ON_START\" = \"true\" ]; then npx medusa exec ./src/scripts/seed-vn-handbags.ts; fi && npm run start"]
