@@ -4,6 +4,8 @@ import {
   Modules,
   ProductStatus,
 } from "@medusajs/framework/utils";
+import { BRAND_MODULE } from "../modules/brand";
+import BrandModuleService from "../modules/brand/service";
 import {
   createWorkflow,
   transform,
@@ -343,6 +345,29 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
   });
   logger.info("Finished seeding publishable API key data.");
 
+  logger.info("Seeding brand data...");
+  const brandService: BrandModuleService = container.resolve(BRAND_MODULE);
+
+  const brands = await brandService.createBrands([
+    {
+      name: "Tina Leather",
+      description: "Thuong hieu tui xach da cao cap Viet Nam",
+    },
+    {
+      name: "Viet Bag",
+      description: "Tui xach thoi trang gia re, chat luong tot",
+    },
+    {
+      name: "Lumi",
+      description: "Thuong hieu ba lo va phu kien thoi trang",
+    },
+  ]);
+
+  const tinaLeather = brands.find((b) => b.name === "Tina Leather")!;
+  const vietBag = brands.find((b) => b.name === "Viet Bag")!;
+  const lumi = brands.find((b) => b.name === "Lumi")!;
+  logger.info("Finished seeding brand data.");
+
   logger.info("Seeding VN handbag product data...");
 
   const { result: categoryResult } = await createProductCategoriesWorkflow(
@@ -370,7 +395,7 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
     },
   });
 
-  await createProductsWorkflow(container).run({
+  const { result: productResult } = await createProductsWorkflow(container).run({
     input: {
       products: [
         {
@@ -602,6 +627,25 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
     },
   });
   logger.info("Finished seeding VN handbag product data.");
+
+  logger.info("Linking products to brands...");
+  const productBrandMap = [
+    { handle: "tui-xach-tay-da-cao-cap", brand: tinaLeather },
+    { handle: "tui-deo-cheo-mini", brand: vietBag },
+    { handle: "ba-lo-da-thoi-trang", brand: lumi },
+    { handle: "vi-cam-tay-nu-da-pu", brand: tinaLeather },
+  ];
+
+  for (const { handle, brand } of productBrandMap) {
+    const product = productResult.find((p) => p.handle === handle);
+    if (product) {
+      await link.create({
+        [Modules.PRODUCT]: { product_id: product.id },
+        [BRAND_MODULE]: { brand_id: brand.id },
+      });
+    }
+  }
+  logger.info("Finished linking products to brands.");
 
   logger.info("Seeding inventory levels...");
 

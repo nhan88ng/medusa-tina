@@ -6,6 +6,9 @@ module.exports = defineConfig({
   admin: {
     disable: process.env.DISABLE_ADMIN === "true",
   },
+  modules: [
+    { resolve: "./src/modules/brand" },
+  ],
   projectConfig: {
     databaseUrl: process.env.DATABASE_URL,
     databaseDriverOptions: process.env.DATABASE_SSL === "false" ? {} : {
