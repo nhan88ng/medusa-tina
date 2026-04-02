@@ -22,4 +22,4 @@ ENV SEED_ON_START=false
 
 EXPOSE 9000
 
-CMD ["sh", "-c", "npx medusa db:migrate && if [ \"$SEED_ON_START\" = \"true\" ]; then npx medusa exec ./src/scripts/seed-vn-handbags.js; fi && npm run start"]
+CMD ["sh", "-c", "npx medusa db:migrate && if [ \"$SEED_ON_START\" = \"true\" ]; then npx medusa exec ./src/scripts/seed-vn-handbags.js || echo 'Seed failed, continuing...'; fi && npm run start"]
