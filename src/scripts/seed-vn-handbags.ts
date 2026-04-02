@@ -263,7 +263,7 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
     });
 
     const serviceZones = await fulfillmentModuleService.listServiceZones({
-      fulfillment_set_id: fulfillmentSet.id,
+      fulfillment_set: { id: fulfillmentSet.id },
     });
 
     await createShippingOptionsWorkflow(container).run({
