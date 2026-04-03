@@ -114,13 +114,15 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
 
   // --- Region (idempotent) ---
   logger.info("Seeding VN region data...");
-  const existingRegions = await regionModuleService.listRegions({
-    name: "Viet Nam",
+  const { data: regionsWithVn } = await query.graph({
+    entity: "region",
+    fields: ["id", "name", "currency_code"],
+    filters: { countries: { iso_2: "vn" } },
   });
   let region;
-  if (existingRegions.length) {
-    region = existingRegions[0];
-    logger.info("Region 'Viet Nam' already exists, skipping.");
+  if (regionsWithVn.length) {
+    region = regionsWithVn[0];
+    logger.info(`Region with country VN already exists ('${region.name}'), skipping.`);
   } else {
     const { result: regionResult } = await createRegionsWorkflow(
       container
