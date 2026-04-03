@@ -10,6 +10,7 @@ import { ArrowLeft, Trash, Spinner } from "@medusajs/icons"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useParams, useNavigate, Link } from "react-router-dom"
 import { sdk } from "../../../lib/client"
+import SeoMetadataSection from "../../../components/seo-metadata-section"
 
 type Brand = {
   id: string
@@ -159,6 +160,9 @@ const BrandDetailPage = () => {
           )}
         </div>
       </Container>
+
+      {/* SEO Metadata */}
+      <SeoMetadataSection entityType="brand" entityId={brand.id} />
     </div>
   )
 }

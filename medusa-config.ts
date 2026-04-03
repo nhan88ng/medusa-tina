@@ -66,6 +66,7 @@ module.exports = defineConfig({
   },
   modules: [
     { resolve: "./src/modules/brand" },
+    { resolve: "./src/modules/seo" },
     ...redisModules,
   ],
   projectConfig: {
@@ -73,6 +74,7 @@ module.exports = defineConfig({
     databaseDriverOptions: process.env.DATABASE_SSL === "false" ? {} : {
       ssl: { rejectUnauthorized: false },
     },
+    redisUrl: process.env.REDIS_URL,
     http: {
       storeCors: process.env.STORE_CORS!,
       adminCors: process.env.ADMIN_CORS!,
