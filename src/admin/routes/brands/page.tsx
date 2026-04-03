@@ -42,11 +42,11 @@ const BrandsPage = () => {
       sdk.client.fetch("/admin/brands", { method: "POST", body: payload }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["brands"] })
-      toast.success("Brand da duoc tao thanh cong")
+      toast.success("Brand created successfully")
       setCreateOpen(false)
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Khong the tao brand")
+      toast.error(error.message || "Failed to create brand")
     },
   })
 
@@ -65,11 +65,11 @@ const BrandsPage = () => {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["brands"] })
-      toast.success("Brand da duoc cap nhat")
+      toast.success("Brand updated successfully")
       setEditBrand(null)
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Khong the cap nhat brand")
+      toast.error(error.message || "Failed to update brand")
     },
   })
 
@@ -78,19 +78,19 @@ const BrandsPage = () => {
       sdk.client.fetch(`/admin/brands/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["brands"] })
-      toast.success("Brand da duoc xoa")
+      toast.success("Brand deleted")
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Khong the xoa brand")
+      toast.error(error.message || "Failed to delete brand")
     },
   })
 
   const handleDelete = async (brand: Brand) => {
     const confirmed = await prompt({
-      title: `Xoa brand "${brand.name}"?`,
-      description: "Hanh dong nay khong the hoan tac.",
-      confirmText: "Xoa",
-      cancelText: "Huy",
+      title: `Delete brand "${brand.name}"?`,
+      description: "This action cannot be undone.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
     })
     if (confirmed) {
       deleteMutation.mutate(brand.id)
@@ -104,7 +104,7 @@ const BrandsPage = () => {
       <div className="flex items-center justify-between px-6 py-4">
         <Heading level="h1">Brands</Heading>
         <Button size="small" onClick={() => setCreateOpen(true)}>
-          Tao Brand
+          Create Brand
         </Button>
       </div>
 
@@ -115,7 +115,7 @@ const BrandsPage = () => {
           </div>
         ) : brands.length === 0 ? (
           <Text size="small" leading="compact" className="text-ui-fg-subtle">
-            Chua co brand nao. Hay tao brand dau tien!
+            No brands yet. Create your first brand!
           </Text>
         ) : (
           <div className="flex flex-col gap-2">
@@ -146,7 +146,7 @@ const BrandsPage = () => {
                         leading="compact"
                         className="text-ui-fg-muted"
                       >
-                        {brand.products.length} san pham
+                        {brand.products.length} products
                       </Text>
                     )}
                   </div>
@@ -216,7 +216,7 @@ function CreateBrandModal({
 
   const handleSubmit = () => {
     const newErrors: Record<string, string> = {}
-    if (!name.trim()) newErrors.name = "Ten brand la bat buoc"
+    if (!name.trim()) newErrors.name = "Brand name is required"
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
       return
@@ -241,7 +241,7 @@ function CreateBrandModal({
             <div className="flex items-center justify-end gap-x-2">
               <FocusModal.Close asChild>
                 <Button size="small" variant="secondary" disabled={isPending}>
-                  Huy
+                  Cancel
                 </Button>
               </FocusModal.Close>
               <Button
@@ -249,23 +249,23 @@ function CreateBrandModal({
                 onClick={handleSubmit}
                 isLoading={isPending}
               >
-                Tao
+                Create
               </Button>
             </div>
           </FocusModal.Header>
 
           <FocusModal.Body className="flex-1 overflow-auto">
             <div className="mx-auto flex w-full max-w-lg flex-col gap-y-4 p-8">
-              <Heading level="h2">Tao Brand Moi</Heading>
+              <Heading level="h2">Create New Brand</Heading>
               <div className="flex flex-col gap-y-2">
-                <Label>Ten *</Label>
+                <Label>Name *</Label>
                 <Input
                   value={name}
                   onChange={(e) => {
                     setName(e.target.value)
                     setErrors({ ...errors, name: "" })
                   }}
-                  placeholder="VD: Tina Leather"
+                  placeholder="e.g. Tina Leather"
                 />
                 {errors.name && (
                   <Text size="small" className="text-ui-fg-error">
@@ -274,11 +274,11 @@ function CreateBrandModal({
                 )}
               </div>
               <div className="flex flex-col gap-y-2">
-                <Label>Mo ta</Label>
+                <Label>Description</Label>
                 <Textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Mo ta ve brand..."
+                  placeholder="Describe the brand..."
                 />
               </div>
             </div>
@@ -308,7 +308,7 @@ function EditBrandModal({
 
   const handleSubmit = () => {
     const newErrors: Record<string, string> = {}
-    if (!name.trim()) newErrors.name = "Ten brand la bat buoc"
+    if (!name.trim()) newErrors.name = "Brand name is required"
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
       return
@@ -327,7 +327,7 @@ function EditBrandModal({
             <div className="flex items-center justify-end gap-x-2">
               <FocusModal.Close asChild>
                 <Button size="small" variant="secondary" disabled={isPending}>
-                  Huy
+                  Cancel
                 </Button>
               </FocusModal.Close>
               <Button
@@ -335,16 +335,16 @@ function EditBrandModal({
                 onClick={handleSubmit}
                 isLoading={isPending}
               >
-                Luu
+                Save
               </Button>
             </div>
           </FocusModal.Header>
 
           <FocusModal.Body className="flex-1 overflow-auto">
             <div className="mx-auto flex w-full max-w-lg flex-col gap-y-4 p-8">
-              <Heading level="h2">Chinh sua Brand</Heading>
+              <Heading level="h2">Edit Brand</Heading>
               <div className="flex flex-col gap-y-2">
-                <Label>Ten *</Label>
+                <Label>Name *</Label>
                 <Input
                   value={name}
                   onChange={(e) => {
@@ -359,7 +359,7 @@ function EditBrandModal({
                 )}
               </div>
               <div className="flex flex-col gap-y-2">
-                <Label>Mo ta</Label>
+                <Label>Description</Label>
                 <Textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}

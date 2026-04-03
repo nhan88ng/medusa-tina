@@ -37,20 +37,20 @@ const BrandDetailPage = () => {
       sdk.client.fetch(`/admin/brands/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["brands"] })
-      toast.success("Brand da duoc xoa")
+      toast.success("Brand deleted")
       navigate("/brands")
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Khong the xoa brand")
+      toast.error(error.message || "Failed to delete brand")
     },
   })
 
   const handleDelete = async () => {
     const confirmed = await prompt({
-      title: `Xoa brand "${brand?.name}"?`,
-      description: "Hanh dong nay khong the hoan tac.",
-      confirmText: "Xoa",
-      cancelText: "Huy",
+      title: `Delete brand "${brand?.name}"?`,
+      description: "This action cannot be undone.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
     })
     if (confirmed) {
       deleteMutation.mutate()
@@ -72,7 +72,7 @@ const BrandDetailPage = () => {
   if (!brand) {
     return (
       <Container className="px-6 py-4">
-        <Text>Khong tim thay brand.</Text>
+        <Text>Brand not found.</Text>
       </Container>
     )
   }
@@ -99,7 +99,7 @@ const BrandDetailPage = () => {
             disabled={deleteMutation.isPending}
           >
             <Trash />
-            Xoa
+            Delete
           </Button>
         </div>
 
@@ -116,7 +116,7 @@ const BrandDetailPage = () => {
       <Container className="divide-y p-0">
         <div className="flex items-center justify-between px-6 py-4">
           <Text size="small" leading="compact" weight="plus">
-            San pham ({brand.products?.length || 0})
+            Products ({brand.products?.length || 0})
           </Text>
         </div>
 
@@ -127,7 +127,7 @@ const BrandDetailPage = () => {
               leading="compact"
               className="text-ui-fg-subtle"
             >
-              Chua co san pham nao duoc lien ket voi brand nay.
+              No products linked to this brand yet.
             </Text>
           ) : (
             <div className="flex flex-col gap-2">
