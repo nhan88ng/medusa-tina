@@ -65,10 +65,13 @@ module.exports = defineConfig({
     disable: process.env.DISABLE_ADMIN === "true",
   },
   modules: [
+    // ===== Custom Content Modules =====
     { resolve: "./src/modules/brand" },
     { resolve: "./src/modules/seo" },
     { resolve: "./src/modules/entity-content" },
     { resolve: "./src/modules/email-template" },
+
+    // ===== Email Notification (Gmail) =====
     {
       resolve: "@medusajs/medusa/notification",
       options: {
@@ -89,6 +92,64 @@ module.exports = defineConfig({
         ],
       },
     },
+
+    // ===== Payment Providers =====
+    {
+      resolve: "@medusajs/medusa/payment",
+      options: {
+        providers: [
+          {
+            resolve: "./src/modules/payment-cod",
+            id: "cod",
+            options: {},
+          },
+          {
+            resolve: "./src/modules/payment-bank-transfer",
+            id: "bank-transfer",
+            options: {
+              bank_name: process.env.BANK_NAME || "Vietcombank",
+              account_number: process.env.BANK_ACCOUNT_NUMBER || "",
+              account_holder: process.env.BANK_ACCOUNT_HOLDER || "TINA SHOP",
+              bank_branch: process.env.BANK_BRANCH || "",
+            },
+          },
+        ],
+      },
+    },
+
+    // ===== File Storage (Local VPS) =====
+    {
+      resolve: "@medusajs/medusa/file",
+      options: {
+        providers: [
+          {
+            resolve: "@medusajs/medusa/file-local",
+            id: "local",
+            options: {
+              upload_dir: process.env.FILE_UPLOAD_DIR || "static",
+              backend_url: process.env.FILE_BACKEND_URL || "http://localhost:9000",
+            },
+          },
+        ],
+      },
+    },
+
+    // ===== Product Reviews =====
+    { resolve: "./src/modules/product-review" },
+
+    // ===== Wishlist =====
+    { resolve: "./src/modules/wishlist" },
+
+    // ===== MeiliSearch =====
+    {
+      resolve: "./src/modules/meilisearch",
+      options: {
+        host: process.env.MEILISEARCH_HOST || "http://localhost:7700",
+        apiKey: process.env.MEILISEARCH_API_KEY || "",
+        productIndexName: process.env.MEILISEARCH_PRODUCT_INDEX || "products",
+      },
+    },
+
     ...redisModules,
   ],
   projectConfig: {

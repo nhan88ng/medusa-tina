@@ -1,8 +1,17 @@
-import { defineMiddlewares, validateAndTransformBody } from "@medusajs/framework/http"
+import {
+  defineMiddlewares,
+  validateAndTransformBody,
+  validateAndTransformQuery,
+  authenticate,
+} from "@medusajs/framework/http"
+import { createFindParams } from "@medusajs/medusa/api/utils/validators"
 import { CreateBrandSchema, UpdateBrandSchema, LinkProductToBrandSchema } from "./admin/brands/validators"
 import { CreateSeoMetadataSchema, UpdateSeoMetadataSchema } from "./admin/seo/validators"
 import { CreateEntityContentSchema, UpdateEntityContentSchema } from "./admin/entity-content/validators"
 import { CreateEmailTemplateSchema, UpdateEmailTemplateSchema, TestEmailTemplateSchema } from "./admin/email-templates/validators"
+import { UpdateReviewSchema, GetAdminReviewsSchema } from "./admin/reviews/validators"
+import { CreateStoreReviewSchema } from "./store/products/[id]/reviews/validators"
+import { AddToWishlistSchema } from "./store/customers/me/wishlist/validators"
 
 export default defineMiddlewares({
   routes: [
@@ -55,6 +64,41 @@ export default defineMiddlewares({
       matcher: "/admin/email-templates/:id/test",
       method: "POST",
       middlewares: [validateAndTransformBody(TestEmailTemplateSchema)],
+    },
+
+    // ===== Reviews (Admin) =====
+    {
+      matcher: "/admin/reviews",
+      method: "GET",
+      middlewares: [
+        validateAndTransformQuery(GetAdminReviewsSchema, {
+          defaults: ["id", "product_id", "customer_id", "rating", "status", "title", "content", "first_name", "last_name", "images", "created_at"],
+          isList: true,
+          defaultLimit: 50,
+        }),
+      ],
+    },
+    {
+      matcher: "/admin/reviews/:id",
+      method: "POST",
+      middlewares: [validateAndTransformBody(UpdateReviewSchema)],
+    },
+
+    // ===== Reviews (Store) =====
+    {
+      matcher: "/store/products/:id/reviews",
+      method: "POST",
+      middlewares: [
+        authenticate("customer", ["session", "bearer"]),
+        validateAndTransformBody(CreateStoreReviewSchema),
+      ],
+    },
+
+    // ===== Wishlist (Store) =====
+    {
+      matcher: "/store/customers/me/wishlist",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AddToWishlistSchema)],
     },
   ],
 })

@@ -487,4 +487,104 @@ export const defaultTemplates: DefaultTemplate[] = [
       days_since_purchase: "Số ngày kể từ lần mua trước",
     }),
   },
+
+  // ===== CHUYỂN KHOẢN NGÂN HÀNG =====
+  {
+    template_key: "bank-transfer-info",
+    name: "Thông tin chuyển khoản",
+    description: "Gửi sau khi khách chọn phương thức chuyển khoản. Bao gồm thông tin tài khoản ngân hàng.",
+    category: "transaction",
+    is_enabled: true,
+    subject: "Thông tin chuyển khoản - Đơn hàng #{{order_id}} - Tina Shop",
+    body: emailWrapper(`
+              <h2 style="margin:0 0 16px;color:#1a1a2e;font-size:20px;">Thông tin chuyển khoản</h2>
+              <p style="margin:0 0 8px;color:#333;font-size:15px;">Xin chào {{#if customer_name}}{{customer_name}}{{else}}Quý khách{{/if}},</p>
+              <p style="margin:0 0 24px;color:#333;font-size:15px;">Cảm ơn bạn đã đặt hàng tại <strong>Tina Shop</strong>! Vui lòng chuyển khoản theo thông tin bên dưới để hoàn tất đơn hàng <strong>#{{order_id}}</strong>.</p>
+
+              <div style="background-color:#f0f4ff;border:2px solid #1a1a2e;border-radius:8px;padding:24px;margin-bottom:24px;">
+                <h3 style="margin:0 0 16px;color:#1a1a2e;font-size:16px;font-weight:700;text-align:center;">Thông tin tài khoản ngân hàng</h3>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <tr style="border-bottom:1px solid #dee2e6;">
+                    <td style="padding:10px 0;color:#666;font-size:14px;width:40%;">Ngân hàng</td>
+                    <td style="padding:10px 0;color:#1a1a2e;font-size:14px;font-weight:700;">{{bank_name}}</td>
+                  </tr>
+                  <tr style="border-bottom:1px solid #dee2e6;">
+                    <td style="padding:10px 0;color:#666;font-size:14px;">Số tài khoản</td>
+                    <td style="padding:10px 0;color:#1a1a2e;font-size:18px;font-weight:700;letter-spacing:2px;">{{account_number}}</td>
+                  </tr>
+                  <tr style="border-bottom:1px solid #dee2e6;">
+                    <td style="padding:10px 0;color:#666;font-size:14px;">Chủ tài khoản</td>
+                    <td style="padding:10px 0;color:#1a1a2e;font-size:14px;font-weight:700;">{{account_holder}}</td>
+                  </tr>
+                  {{#if bank_branch}}
+                  <tr style="border-bottom:1px solid #dee2e6;">
+                    <td style="padding:10px 0;color:#666;font-size:14px;">Chi nhánh</td>
+                    <td style="padding:10px 0;color:#333;font-size:14px;">{{bank_branch}}</td>
+                  </tr>
+                  {{/if}}
+                  <tr style="border-bottom:1px solid #dee2e6;">
+                    <td style="padding:10px 0;color:#666;font-size:14px;">Số tiền</td>
+                    <td style="padding:10px 0;color:#e63946;font-size:18px;font-weight:700;">{{formatPrice total currency_code}}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:10px 0;color:#666;font-size:14px;">Nội dung CK</td>
+                    <td style="padding:10px 0;color:#1a1a2e;font-size:16px;font-weight:700;background-color:#fff3cd;padding:8px 12px;border-radius:4px;">TINA {{order_id}}</td>
+                  </tr>
+                </table>
+              </div>
+
+              <div style="background-color:#fff3cd;border-radius:6px;padding:16px;margin-bottom:24px;">
+                <p style="margin:0;color:#856404;font-size:14px;font-weight:600;">⚠️ Lưu ý quan trọng:</p>
+                <ul style="margin:8px 0 0;padding-left:20px;color:#856404;font-size:13px;line-height:1.6;">
+                  <li>Vui lòng ghi đúng nội dung chuyển khoản: <strong>TINA {{order_id}}</strong></li>
+                  <li>Chuyển khoản trong vòng <strong>24 giờ</strong> kể từ khi đặt hàng</li>
+                  <li>Đơn hàng sẽ được xử lý sau khi chúng tôi xác nhận thanh toán</li>
+                </ul>
+              </div>
+
+              <p style="margin:0;color:#666;font-size:13px;">Nếu đã chuyển khoản, vui lòng chờ 1-2 giờ để chúng tôi xác nhận. Mọi thắc mắc vui lòng liên hệ với shop.</p>
+    `),
+    available_variables: JSON.stringify({
+      order_id: "Mã đơn hàng",
+      customer_name: "Tên khách hàng",
+      total: "Tổng tiền",
+      currency_code: "Mã tiền tệ",
+      bank_name: "Tên ngân hàng",
+      account_number: "Số tài khoản",
+      account_holder: "Chủ tài khoản",
+      bank_branch: "Chi nhánh ngân hàng",
+    }),
+  },
+
+  // ===== ĐÁNH GIÁ SẢN PHẨM =====
+  {
+    template_key: "review-submitted",
+    name: "Xác nhận đã gửi đánh giá",
+    description: "Cảm ơn khách hàng sau khi họ gửi đánh giá sản phẩm. Thông báo đang chờ duyệt.",
+    category: "care",
+    is_enabled: true,
+    subject: "Cảm ơn bạn đã đánh giá sản phẩm - Tina Shop",
+    body: emailWrapper(`
+              <h2 style="margin:0 0 16px;color:#1a1a2e;font-size:20px;">Cảm ơn đánh giá của bạn! ⭐</h2>
+              <p style="margin:0 0 8px;color:#333;font-size:15px;">Xin chào {{#if customer_name}}{{customer_name}}{{else}}Quý khách{{/if}},</p>
+              <p style="margin:0 0 24px;color:#333;font-size:15px;">Chúng tôi đã nhận được đánh giá <strong>{{rating}}/5 sao</strong> của bạn cho sản phẩm <strong>{{product_title}}</strong>.</p>
+
+              <div style="background-color:#f8f9fa;border-radius:6px;padding:20px;margin-bottom:24px;">
+                <p style="margin:0 0 8px;color:#666;font-size:13px;">Đánh giá của bạn</p>
+                <p style="margin:0 0 8px;font-size:24px;">{{#each stars}}⭐{{/each}}</p>
+                {{#if title}}<p style="margin:0 0 8px;color:#1a1a2e;font-size:15px;font-weight:600;">"{{title}}"</p>{{/if}}
+                <p style="margin:0;color:#333;font-size:14px;font-style:italic;">"{{content}}"</p>
+              </div>
+
+              <p style="margin:0 0 16px;color:#666;font-size:14px;">Đánh giá của bạn đang chờ được duyệt và sẽ được hiển thị trong thời gian sớm nhất.</p>
+              <p style="margin:0;color:#666;font-size:13px;">Cảm ơn bạn đã chia sẻ trải nghiệm và giúp các khách hàng khác có thêm thông tin hữu ích!</p>
+    `),
+    available_variables: JSON.stringify({
+      customer_name: "Tên khách hàng",
+      product_title: "Tên sản phẩm",
+      rating: "Số sao (1-5)",
+      title: "Tiêu đề đánh giá",
+      content: "Nội dung đánh giá",
+    }),
+  },
 ]

@@ -133,7 +133,7 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
             name: "Viet Nam",
             currency_code: "vnd",
             countries,
-            payment_providers: ["pp_system_default"],
+            payment_providers: ["pp_system_default", "pp_cod_cod", "pp_bank-transfer_bank-transfer"],
           },
         ],
       },
