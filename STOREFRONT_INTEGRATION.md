@@ -1,6 +1,6 @@
 # Storefront Integration Guide — Custom Medusa Modules
 
-This document describes all custom modules built on top of this Medusa backend and how to consume them from the storefront. Read this before implementing any feature that touches brands, SEO metadata, or rich text content.
+This document describes all custom modules built on top of this Medusa backend and how to consume them from the storefront. Read this before implementing any feature that touches brands, SEO metadata, rich text content, or transactional/marketing emails.
 
 ---
 
@@ -11,6 +11,7 @@ This document describes all custom modules built on top of this Medusa backend a
 | **Brand** | Brand entities linked to products |
 | **SEO Metadata** | Per-entity SEO fields (title, description, OG tags, etc.) linked to products, categories, collections, and brands |
 | **Entity Content** | Rich text (HTML) content linked to products, categories, and collections |
+| **Email Template** | Admin-managed email templates (Handlebars HTML) with enable/disable per template |
 
 All store endpoints are **public** (no auth required) and require the `x-publishable-api-key` header. Use the Medusa JS SDK — it handles this automatically.
 
@@ -271,6 +272,108 @@ export function useCollectionContent(collectionId: string | undefined) {
 
 ---
 
+## Module: Email Marketing System
+
+The email system is **entirely backend-driven** — no store API endpoints are exposed. However, the storefront must implement specific pages and behaviors to support the automated email flows.
+
+### Automated emails and their triggers
+
+| Email | Trigger | Storefront requirement |
+|-------|---------|----------------------|
+| `order-confirmation` | Order placed | None (standard checkout) |
+| `shipping-confirmation` | Fulfillment created | None |
+| `delivery-confirmation` | Fulfillment delivered | None |
+| `order-cancelled` | Order cancelled | None |
+| `refund-confirmation` | Refund created | None |
+| `password-reset` | Auth password reset | `/account/reset-password?token=...` page |
+| `welcome-customer` | Customer registered | None (fires automatically) |
+| `abandoned-cart` | Cart inactive > 1 hour | `/cart` page, see below |
+| `review-request` | 5 days after order | `/account/orders/:id` page, see below |
+| `win-back` | Customer inactive 30 days | None (disabled by default) |
+| `repurchase-reminder` | Periodic cron | None (disabled by default) |
+
+### Storefront base URL
+
+All email links use `STORE_CORS` as the storefront base URL (first value when comma-separated). Set this env var on the backend to your production storefront domain:
+
+```
+STORE_CORS=https://yourstore.com
+```
+
+---
+
+### Abandoned Cart Email
+
+The backend job queries carts where `completed_at = null` and `updated_at < 1 hour ago` that have an email address. The email contains a **"Return to Cart"** button pointing to:
+
+```
+${STORE_CORS}/cart
+```
+
+**Storefront requirements:**
+
+1. **Collect email early in checkout.** The cart must have an `email` field set for the job to pick it up. Set it as soon as the customer enters their email — do not wait until payment.
+
+```typescript
+// When customer enters email at checkout step 1
+await sdk.store.cart.update(cartId, { email: customerEmail })
+```
+
+2. **`/cart` page must restore the cart** — When the user clicks the email link, the cart session cookie should restore their cart automatically (standard Medusa behavior). Ensure the cart cookie is set before the checkout session expires.
+
+3. **Suppress duplicate reminders** — The current job sends to ALL matching carts every hour. To avoid spam, implement one of:
+   - Store a `reminder_sent_at` flag in cart metadata after first reminder
+   - Check `metadata.abandoned_cart_email_sent` before sending (requires updating `abandoned-cart.ts` on backend)
+
+---
+
+### Review Request Email
+
+The backend job runs daily at 9 AM and sends to customers whose orders were created 5–6 days ago. The email contains a **"Write a Review"** button pointing to:
+
+```
+${STORE_CORS}/account/orders/:orderId
+```
+
+**Storefront requirements:**
+
+1. **`/account/orders/:id` page** — Must exist and be accessible to logged-in customers. This is where customers click to leave product reviews.
+
+2. **Review UI on the order detail page** — Each line item should have a "Rate this product" section. This is a frontend-only feature (or backed by a future `review` module on the backend).
+
+---
+
+### Password Reset Email
+
+The reset link in the email points to:
+
+```
+${STORE_CORS}/account/reset-password?token=TOKEN&email=EMAIL
+```
+
+**Storefront requirements:**
+
+The `/account/reset-password` page must:
+1. Read `token` and `email` from query params
+2. Show a form for new password input
+3. Submit to the Medusa auth reset endpoint:
+
+```typescript
+await sdk.auth.resetPassword("customer", "emailpass", {
+  token: searchParams.get("token")!,
+  email: searchParams.get("email")!,
+  password: newPassword,
+})
+```
+
+---
+
+### Welcome Customer Email
+
+Fires automatically when a customer registers. No storefront action needed — but the email contains a link to the storefront home (`${STORE_CORS}`). Ensure the storefront is live and accessible from that URL before enabling this template.
+
+---
+
 ## Integration Checklist
 
 - [ ] SEO endpoints → call from **server components** / `generateMetadata`, not client hooks
@@ -278,6 +381,11 @@ export function useCollectionContent(collectionId: string | undefined) {
 - [ ] Brand list → safe to cache with `staleTime: Infinity` (changes rarely)
 - [ ] All custom routes → use `sdk.client.fetch()`, never raw `fetch()`
 - [ ] `seo_metadata` and `entity_content` can be `null` — always guard before rendering
+- [ ] **Email: Abandoned cart** → collect cart email early (`sdk.store.cart.update`) before checkout completes
+- [ ] **Email: Review request** → implement `/account/orders/:id` page with review UI per line item
+- [ ] **Email: Password reset** → implement `/account/reset-password?token=&email=` page with reset form
+- [ ] **Email: All links** → set `STORE_CORS` env var on backend to production storefront domain
+- [ ] **Email: Welcome** → ensure storefront home page is publicly accessible at `STORE_CORS`
 
 ---
 

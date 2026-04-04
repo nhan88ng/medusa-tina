@@ -68,6 +68,27 @@ module.exports = defineConfig({
     { resolve: "./src/modules/brand" },
     { resolve: "./src/modules/seo" },
     { resolve: "./src/modules/entity-content" },
+    { resolve: "./src/modules/email-template" },
+    {
+      resolve: "@medusajs/medusa/notification",
+      options: {
+        providers: [
+          {
+            resolve: "./src/modules/email-notification",
+            id: "gmail",
+            options: {
+              channels: ["email"],
+              email_from: process.env.GMAIL_EMAIL_FROM,
+              email_from_name: process.env.GMAIL_EMAIL_FROM_NAME,
+              gmail_user: process.env.GMAIL_USER,
+              google_client_id: process.env.GOOGLE_CLIENT_ID,
+              google_client_secret: process.env.GOOGLE_CLIENT_SECRET,
+              google_refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+            },
+          },
+        ],
+      },
+    },
     ...redisModules,
   ],
   projectConfig: {

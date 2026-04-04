@@ -2,6 +2,7 @@ import { defineMiddlewares, validateAndTransformBody } from "@medusajs/framework
 import { CreateBrandSchema, UpdateBrandSchema, LinkProductToBrandSchema } from "./admin/brands/validators"
 import { CreateSeoMetadataSchema, UpdateSeoMetadataSchema } from "./admin/seo/validators"
 import { CreateEntityContentSchema, UpdateEntityContentSchema } from "./admin/entity-content/validators"
+import { CreateEmailTemplateSchema, UpdateEmailTemplateSchema, TestEmailTemplateSchema } from "./admin/email-templates/validators"
 
 export default defineMiddlewares({
   routes: [
@@ -39,6 +40,21 @@ export default defineMiddlewares({
       matcher: "/admin/entity-content/:id",
       method: "POST",
       middlewares: [validateAndTransformBody(UpdateEntityContentSchema)],
+    },
+    {
+      matcher: "/admin/email-templates",
+      method: "POST",
+      middlewares: [validateAndTransformBody(CreateEmailTemplateSchema)],
+    },
+    {
+      matcher: "/admin/email-templates/:id",
+      method: "POST",
+      middlewares: [validateAndTransformBody(UpdateEmailTemplateSchema)],
+    },
+    {
+      matcher: "/admin/email-templates/:id/test",
+      method: "POST",
+      middlewares: [validateAndTransformBody(TestEmailTemplateSchema)],
     },
   ],
 })
