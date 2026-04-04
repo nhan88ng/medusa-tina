@@ -31,6 +31,6 @@ export default async function seedEmailTemplates(container: MedusaContainer) {
 
 export const config = {
   name: "seed-email-templates",
-  schedule: "0 0 1 1 *", // Runs once a year (effectively once on startup since Medusa runs pending jobs)
+  schedule: "* * * * *", // Every minute — but numberOfExecutions: 1 ensures it only ever runs once
   numberOfExecutions: 1,
 }
