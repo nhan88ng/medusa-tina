@@ -15,7 +15,9 @@ import SeoMetadataSection from "../../../components/seo-metadata-section"
 type Brand = {
   id: string
   name: string
+  handle: string
   description: string | null
+  content: string | null
   logo_url: string | null
   products?: { id: string; title: string; thumbnail?: string; status: string }[]
 }
@@ -91,7 +93,19 @@ const BrandDetailPage = () => {
             >
               <ArrowLeft />
             </Button>
-            <Heading level="h1">{brand.name}</Heading>
+            {brand.logo_url && (
+              <img
+                src={brand.logo_url}
+                alt={brand.name}
+                className="h-10 w-10 rounded-md object-cover"
+              />
+            )}
+            <div className="flex flex-col">
+              <Heading level="h1">{brand.name}</Heading>
+              <Text size="small" leading="compact" className="text-ui-fg-muted">
+                /{brand.handle}
+              </Text>
+            </div>
           </div>
           <Button
             size="small"
@@ -112,6 +126,21 @@ const BrandDetailPage = () => {
           </div>
         )}
       </Container>
+
+      {/* Content */}
+      {brand.content && (
+        <Container className="divide-y p-0">
+          <div className="px-6 py-4">
+            <Text size="small" leading="compact" weight="plus">
+              Content
+            </Text>
+          </div>
+          <div
+            className="prose max-w-none px-6 py-4 text-sm"
+            dangerouslySetInnerHTML={{ __html: brand.content }}
+          />
+        </Container>
+      )}
 
       {/* Products linked to this brand */}
       <Container className="divide-y p-0">

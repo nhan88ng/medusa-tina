@@ -6,7 +6,9 @@ import { createBrandStep } from "./steps/create-brand"
 
 type CreateBrandWorkflowInput = {
   name: string
+  handle?: string
   description?: string
+  content?: string
   logo_url?: string
 }
 

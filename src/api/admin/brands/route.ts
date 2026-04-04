@@ -14,7 +14,7 @@ export const GET = async (
 
   const { data: brands } = await query.graph({
     entity: "brand",
-    fields: ["id", "name", "description", "logo_url", "products.*"],
+    fields: ["id", "name", "handle", "description", "content", "logo_url", "products.*"],
   })
 
   res.json({ brands })

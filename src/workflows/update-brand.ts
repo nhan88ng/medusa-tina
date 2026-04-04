@@ -7,7 +7,9 @@ import { updateBrandStep } from "./steps/update-brand"
 type UpdateBrandWorkflowInput = {
   id: string
   name?: string
+  handle?: string
   description?: string
+  content?: string
   logo_url?: string
 }
 

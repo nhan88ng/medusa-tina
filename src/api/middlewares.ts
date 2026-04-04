@@ -1,6 +1,7 @@
 import { defineMiddlewares, validateAndTransformBody } from "@medusajs/framework/http"
 import { CreateBrandSchema, UpdateBrandSchema, LinkProductToBrandSchema } from "./admin/brands/validators"
 import { CreateSeoMetadataSchema, UpdateSeoMetadataSchema } from "./admin/seo/validators"
+import { CreateEntityContentSchema, UpdateEntityContentSchema } from "./admin/entity-content/validators"
 
 export default defineMiddlewares({
   routes: [
@@ -28,6 +29,16 @@ export default defineMiddlewares({
       matcher: "/admin/seo/:id",
       method: "POST",
       middlewares: [validateAndTransformBody(UpdateSeoMetadataSchema)],
+    },
+    {
+      matcher: "/admin/entity-content",
+      method: "POST",
+      middlewares: [validateAndTransformBody(CreateEntityContentSchema)],
+    },
+    {
+      matcher: "/admin/entity-content/:id",
+      method: "POST",
+      middlewares: [validateAndTransformBody(UpdateEntityContentSchema)],
     },
   ],
 })

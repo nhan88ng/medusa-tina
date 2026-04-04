@@ -67,6 +67,7 @@ module.exports = defineConfig({
   modules: [
     { resolve: "./src/modules/brand" },
     { resolve: "./src/modules/seo" },
+    { resolve: "./src/modules/entity-content" },
     ...redisModules,
   ],
   projectConfig: {
