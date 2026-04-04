@@ -30,10 +30,10 @@ type EmailTemplate = {
 }
 
 const categoryLabels: Record<string, string> = {
-  transaction: "Giao dich",
-  growth: "Tang truong",
-  care: "Cham soc",
-  engagement: "Gan ket",
+  transaction: "Transaction",
+  growth: "Growth",
+  care: "Care",
+  engagement: "Engagement",
 }
 
 const categoryColors: Record<string, "green" | "blue" | "orange" | "purple"> = {
@@ -65,7 +65,7 @@ const EmailTemplatesPage = () => {
       queryClient.invalidateQueries({ queryKey: ["email-templates"] })
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Khong the cap nhat trang thai")
+      toast.error(error.message || "Failed to update status")
     },
   })
 
@@ -92,7 +92,7 @@ const EmailTemplatesPage = () => {
         <div>
           <Heading level="h1">Email Templates</Heading>
           <Text size="small" className="text-ui-fg-subtle mt-1">
-            Quan ly cac mau email tu dong
+            Manage automated email templates
           </Text>
         </div>
         <div className="flex items-center gap-x-3">
@@ -102,14 +102,14 @@ const EmailTemplatesPage = () => {
             onValueChange={setCategoryFilter}
           >
             <Select.Trigger>
-              <Select.Value placeholder="Tat ca" />
+              <Select.Value placeholder="All" />
             </Select.Trigger>
             <Select.Content>
-              <Select.Item value="all">Tat ca</Select.Item>
-              <Select.Item value="transaction">Giao dich</Select.Item>
-              <Select.Item value="growth">Tang truong</Select.Item>
-              <Select.Item value="care">Cham soc</Select.Item>
-              <Select.Item value="engagement">Gan ket</Select.Item>
+              <Select.Item value="all">All</Select.Item>
+              <Select.Item value="transaction">Transaction</Select.Item>
+              <Select.Item value="growth">Growth</Select.Item>
+              <Select.Item value="care">Care</Select.Item>
+              <Select.Item value="engagement">Engagement</Select.Item>
             </Select.Content>
           </Select>
         </div>
@@ -123,7 +123,7 @@ const EmailTemplatesPage = () => {
         ) : templates.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
             <Text className="text-ui-fg-subtle">
-              Chua co template nao. Chay seed de tao template mac dinh.
+              No templates found. Run seed to create default templates.
             </Text>
           </div>
         ) : (

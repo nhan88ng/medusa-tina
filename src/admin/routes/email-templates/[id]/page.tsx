@@ -31,10 +31,10 @@ type EmailTemplate = {
 }
 
 const categoryLabels: Record<string, string> = {
-  transaction: "Giao dich",
-  growth: "Tang truong",
-  care: "Cham soc",
-  engagement: "Gan ket",
+  transaction: "Transaction",
+  growth: "Growth",
+  care: "Care",
+  engagement: "Engagement",
 }
 
 const categoryColors: Record<string, "green" | "blue" | "orange" | "purple"> = {
@@ -86,11 +86,11 @@ const EmailTemplateDetailPage = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["email-template", id] })
       queryClient.invalidateQueries({ queryKey: ["email-templates"] })
-      toast.success("Da luu template")
+      toast.success("Template saved")
       setIsDirty(false)
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Khong the luu template")
+      toast.error(error.message || "Failed to save template")
     },
   })
 
@@ -101,10 +101,10 @@ const EmailTemplateDetailPage = () => {
         body: { to },
       }),
     onSuccess: () => {
-      toast.success(`Da gui test email toi ${testEmail}`)
+      toast.success(`Test email sent to ${testEmail}`)
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Khong the gui test email")
+      toast.error(error.message || "Failed to send test email")
     },
   })
 
@@ -122,11 +122,11 @@ const EmailTemplateDetailPage = () => {
         setSubject(t.subject)
         setBody(t.body)
       }
-      toast.success("Da khoi phuc ve template mac dinh")
+      toast.success("Template reset to default")
       setIsDirty(false)
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Khong the reset template")
+      toast.error(error.message || "Failed to reset template")
     },
   })
 
@@ -141,11 +141,11 @@ const EmailTemplateDetailPage = () => {
 
   const handleReset = async () => {
     const confirmed = await prompt({
-      title: "Khoi phuc template mac dinh?",
+      title: "Reset to default template?",
       description:
-        "Subject va body se bi ghi de boi template mac dinh. Thao tac nay khong the hoan tac.",
-      confirmText: "Khoi phuc",
-      cancelText: "Huy",
+        "Subject and body will be overwritten by the default template. This action cannot be undone.",
+      confirmText: "Reset",
+      cancelText: "Cancel",
     })
     if (confirmed) {
       resetMutation.mutate()
@@ -154,11 +154,11 @@ const EmailTemplateDetailPage = () => {
 
   const handleSendTest = () => {
     if (!testEmail) {
-      toast.error("Vui long nhap email")
+      toast.error("Please enter an email address")
       return
     }
     if (isDirty) {
-      toast.error("Vui long luu template truoc khi gui test")
+      toast.error("Please save the template before sending a test")
       return
     }
     testMutation.mutate(testEmail)
@@ -237,7 +237,7 @@ const EmailTemplateDetailPage = () => {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <Text size="small" className="text-ui-fg-subtle">
-                {isEnabled ? "Bat" : "Tat"}
+                {isEnabled ? "Enabled" : "Disabled"}
               </Text>
               <Switch
                 checked={isEnabled}
@@ -258,7 +258,7 @@ const EmailTemplateDetailPage = () => {
               disabled={!isDirty}
               isLoading={updateMutation.isPending}
             >
-              Luu
+              Save
             </Button>
           </div>
         </div>
@@ -276,7 +276,7 @@ const EmailTemplateDetailPage = () => {
         <div className="lg:col-span-2 flex flex-col gap-4">
           <Container className="divide-y p-0">
             <div className="px-6 py-4">
-              <Heading level="h2">Noi dung email</Heading>
+              <Heading level="h2">Email Content</Heading>
             </div>
             <div className="flex flex-col gap-4 px-6 py-4">
               <div className="flex flex-col gap-y-2">
@@ -332,7 +332,7 @@ const EmailTemplateDetailPage = () => {
           {/* Test Email */}
           <Container className="divide-y p-0">
             <div className="px-6 py-4">
-              <Heading level="h2">Gui test</Heading>
+              <Heading level="h2">Send Test</Heading>
             </div>
             <div className="flex flex-col gap-3 px-6 py-4">
               <Input
@@ -348,7 +348,7 @@ const EmailTemplateDetailPage = () => {
                 isLoading={testMutation.isPending}
                 className="w-full"
               >
-                Gui test email
+                Send test email
               </Button>
             </div>
           </Container>
@@ -357,7 +357,7 @@ const EmailTemplateDetailPage = () => {
           {Object.keys(variables).length > 0 && (
             <Container className="divide-y p-0">
               <div className="px-6 py-4">
-                <Heading level="h2">Bien co san</Heading>
+                <Heading level="h2">Available Variables</Heading>
               </div>
               <div className="px-6 py-4">
                 <div className="flex flex-col gap-2">
