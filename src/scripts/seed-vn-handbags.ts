@@ -121,9 +121,31 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
     filters: { countries: { iso_2: "vn" } },
   });
   let region;
+  const requiredPaymentProviders = ["pp_system_default", "pp_cod_cod", "pp_bank-transfer_bank-transfer"];
+
   if (regionsWithVn.length) {
     region = regionsWithVn[0];
-    logger.info(`Region with country VN already exists ('${region.name}'), skipping.`);
+    logger.info(`Region with country VN already exists ('${region.name}'), ensuring payment providers are linked...`);
+
+    // Re-link payment providers (they can be lost after db:migrate / redeploy)
+    const { data: regionWithProviders } = await query.graph({
+      entity: "region",
+      fields: ["payment_providers.*"],
+      filters: { id: region.id },
+    });
+    const existingProviderIds = new Set(
+      (regionWithProviders[0]?.payment_providers || []).map((p: any) => p.id)
+    );
+    for (const providerId of requiredPaymentProviders) {
+      if (!existingProviderIds.has(providerId)) {
+        logger.info(`Linking payment provider '${providerId}' to region '${region.name}'...`);
+        await link.create({
+          [Modules.REGION]: { region_id: region.id },
+          [Modules.PAYMENT]: { payment_provider_id: providerId },
+        });
+      }
+    }
+    logger.info("Payment providers ensured.");
   } else {
     const { result: regionResult } = await createRegionsWorkflow(
       container
@@ -134,7 +156,7 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
             name: "Viet Nam",
             currency_code: "vnd",
             countries,
-            payment_providers: ["pp_system_default", "pp_cod_cod", "pp_bank-transfer_bank-transfer"],
+            payment_providers: requiredPaymentProviders,
           },
         ],
       },
