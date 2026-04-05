@@ -57,9 +57,8 @@ export function renderOrderConfirmation(
     ? `
       <p style="margin: 0; color: #555;">
         ${addr.first_name || ""} ${addr.last_name || ""}<br/>
-        ${addr.address_1 || ""}${addr.address_2 ? ", " + addr.address_2 : ""}<br/>
-        ${addr.city || ""}, ${addr.province || ""} ${addr.postal_code || ""}<br/>
-        ${(addr.country_code || "").toUpperCase()}
+        ${addr.address_1 || ""}<br/>
+        ${addr.city || ""}${addr.province ? ", " + addr.province : ""}${addr.postal_code ? " " + addr.postal_code : ""}
       </p>`
     : "<p style='color: #999;'>Không có thông tin</p>"
 

@@ -164,12 +164,12 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
   // --- Stock location (idempotent) ---
   logger.info("Seeding VN stock location data...");
   const existingLocations = await stockLocationModuleService.listStockLocations({
-    name: "Kho Ha Noi",
+    name: "Kho HCM",
   });
   let stockLocation;
   if (existingLocations.length) {
     stockLocation = existingLocations[0];
-    logger.info("Stock location 'Kho Ha Noi' already exists, skipping.");
+    logger.info("Stock location 'Kho HCM' already exists, skipping.");
   } else {
     const { result: stockLocationResult } = await createStockLocationsWorkflow(
       container
@@ -177,11 +177,11 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
       input: {
         locations: [
           {
-            name: "Kho Ha Noi",
+            name: "Kho HCM",
             address: {
-              city: "Ha Noi",
+              city: "Ho Chi Minh",
               country_code: "VN",
-              address_1: "123 Cau Giay, Cau Giay",
+              address_1: "Hau Giang, Phuong Binh Phu, HCM",
             },
           },
         ],
@@ -230,25 +230,107 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
     shippingProfile = shippingProfileResult[0];
   }
 
-  const existingFulfillmentSets =
-    await fulfillmentModuleService.listFulfillmentSets({
+  // Shipping config from ENV
+  const shippingStandardPrice = parseInt(
+    process.env.SHIPPING_STANDARD_PRICE || "30000"
+  );
+  const shippingExpressPrice = parseInt(
+    process.env.SHIPPING_EXPRESS_PRICE || "50000"
+  );
+  const freeShipStandardThreshold = parseInt(
+    process.env.FREE_SHIP_STANDARD_THRESHOLD || "300000"
+  );
+  const freeShipExpressThreshold = parseInt(
+    process.env.FREE_SHIP_EXPRESS_THRESHOLD || "500000"
+  );
+
+  // Check zones AND shipping option counts to avoid unnecessary recreation.
+  // Expected: "Giao hang toan quoc" (1 option) + "Giao hang TP.HCM" (2 options).
+  const existingZones = await fulfillmentModuleService.listServiceZones({
+    name: ["Giao hang toan quoc", "Giao hang TP.HCM"],
+  });
+  const zoneToanQuocExisting = existingZones.find((z) => z.name === "Giao hang toan quoc");
+  const zoneHCMExisting = existingZones.find((z) => z.name === "Giao hang TP.HCM");
+
+  let hasCorrectStructure = false;
+  if (zoneToanQuocExisting && zoneHCMExisting) {
+    const optionsToanQuoc = await fulfillmentModuleService.listShippingOptions({
+      service_zone_id: [zoneToanQuocExisting.id],
+    });
+    const optionsHCM = await fulfillmentModuleService.listShippingOptions({
+      service_zone_id: [zoneHCMExisting.id],
+    });
+    // Correct: toan quoc has 1 option, HCM has 2 options (standard + express)
+    hasCorrectStructure = optionsToanQuoc.length === 1 && optionsHCM.length === 2;
+  }
+
+  let fulfillmentSet;
+  if (hasCorrectStructure) {
+    logger.info("Shipping zones already configured correctly, skipping.");
+  } else {
+    // Cleanup old fulfillment set if exists (e.g. from previous seed with different structure)
+    const oldFulfillmentSets = await fulfillmentModuleService.listFulfillmentSets({
       name: "Giao hang Viet Nam",
     });
-  let fulfillmentSet;
-  if (existingFulfillmentSets.length) {
-    fulfillmentSet = existingFulfillmentSets[0];
-    logger.info("Fulfillment set 'Giao hang Viet Nam' already exists, skipping.");
-  } else {
+    if (oldFulfillmentSets.length) {
+      logger.info("Old shipping structure detected — migrating to 2-zone structure...");
+      const oldSet = oldFulfillmentSets[0];
+
+      // 1. Delete old shipping options first (they reference service zones)
+      const oldServiceZones = await fulfillmentModuleService.listServiceZones({
+        fulfillment_set: { id: oldSet.id },
+      });
+      if (oldServiceZones.length) {
+        const oldShippingOptions = await fulfillmentModuleService.listShippingOptions({
+          service_zone_id: oldServiceZones.map((z) => z.id),
+        });
+        if (oldShippingOptions.length) {
+          await fulfillmentModuleService.deleteShippingOptions(
+            oldShippingOptions.map((o) => o.id)
+          );
+          logger.info(`Deleted ${oldShippingOptions.length} old shipping options.`);
+        }
+      }
+
+      // 2. Dismiss ALL stock location ↔ fulfillment set links for this fulfillment set
+      //    (there may be multiple locations linked from previous seed runs)
+      const allLocations = await stockLocationModuleService.listStockLocations({});
+      for (const loc of allLocations) {
+        try {
+          await link.dismiss({
+            [Modules.STOCK_LOCATION]: { stock_location_id: loc.id },
+            [Modules.FULFILLMENT]: { fulfillment_set_id: oldSet.id },
+          });
+        } catch {
+          // ignore: link may not exist for this location
+        }
+      }
+
+      // 3. Delete old fulfillment set (cascades to service zones and geo zones)
+      await fulfillmentModuleService.deleteFulfillmentSets([oldSet.id]);
+      logger.info("Deleted old fulfillment set.");
+    }
+
     fulfillmentSet = await fulfillmentModuleService.createFulfillmentSets({
       name: "Giao hang Viet Nam",
       type: "shipping",
       service_zones: [
         {
-          name: "Viet Nam",
+          name: "Giao hang toan quoc",
           geo_zones: [
             {
               country_code: "vn",
               type: "country",
+            },
+          ],
+        },
+        {
+          name: "Giao hang TP.HCM",
+          geo_zones: [
+            {
+              country_code: "vn",
+              type: "province",
+              province_code: "vn-sg",
             },
           ],
         },
@@ -267,87 +349,123 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
     const serviceZones = await fulfillmentModuleService.listServiceZones({
       fulfillment_set: { id: fulfillmentSet.id },
     });
+    const zoneToanQuoc = serviceZones.find(
+      (z) => z.name === "Giao hang toan quoc"
+    );
+    const zoneHCM = serviceZones.find(
+      (z) => z.name === "Giao hang TP.HCM"
+    );
+
+    // Build prices with optional free shipping rule
+    const buildPrices = (basePrice: number, freeThreshold: number, regionId: string) => {
+      const prices: any[] = [
+        { currency_code: "vnd", amount: basePrice },
+        { region_id: regionId, amount: basePrice },
+      ];
+      if (freeThreshold > 0) {
+        prices.push(
+          {
+            currency_code: "vnd",
+            amount: 0,
+            rules: [{ attribute: "item_total", operator: "gte", value: freeThreshold }],
+          },
+          {
+            region_id: regionId,
+            amount: 0,
+            rules: [{ attribute: "item_total", operator: "gte", value: freeThreshold }],
+          }
+        );
+      }
+      return prices;
+    };
+
+    const shippingRules = [
+      { attribute: "enabled_in_store", value: "true", operator: "eq" },
+      { attribute: "is_return", value: "false", operator: "eq" },
+    ];
 
     await createShippingOptionsWorkflow(container).run({
       input: [
+        // Zone: Giao hang toan quoc — standard only
         {
           name: "Giao hang tieu chuan",
           price_type: "flat",
           provider_id: "manual_manual",
-          service_zone_id: serviceZones[0].id,
+          service_zone_id: zoneToanQuoc!.id,
           shipping_profile_id: shippingProfile.id,
-          type: {
-            label: "Tieu chuan",
-            description: "Giao hang trong 3-5 ngay.",
-            code: "standard",
-          },
-          prices: [
-            {
-              currency_code: "vnd",
-              amount: 30000,
-            },
-            {
-              currency_code: "usd",
-              amount: 2,
-            },
-            {
-              region_id: region.id,
-              amount: 30000,
-            },
-          ],
-          rules: [
-            {
-              attribute: "enabled_in_store",
-              value: "true",
-              operator: "eq",
-            },
-            {
-              attribute: "is_return",
-              value: "false",
-              operator: "eq",
-            },
-          ],
+          type: { label: "Tieu chuan", description: "Giao hang trong 3-5 ngay.", code: "standard" },
+          prices: buildPrices(shippingStandardPrice, freeShipStandardThreshold, region.id),
+          rules: shippingRules,
         },
+        // Zone: Giao hang TP.HCM — standard + express
         {
-          name: "Giao hang nhanh",
+          name: "Giao hang tieu chuan",
           price_type: "flat",
           provider_id: "manual_manual",
-          service_zone_id: serviceZones[0].id,
+          service_zone_id: zoneHCM!.id,
           shipping_profile_id: shippingProfile.id,
-          type: {
-            label: "Nhanh",
-            description: "Giao hang trong 1-2 ngay.",
-            code: "express",
-          },
-          prices: [
-            {
-              currency_code: "vnd",
-              amount: 50000,
-            },
-            {
-              currency_code: "usd",
-              amount: 3,
-            },
-            {
-              region_id: region.id,
-              amount: 50000,
-            },
-          ],
-          rules: [
-            {
-              attribute: "enabled_in_store",
-              value: "true",
-              operator: "eq",
-            },
-            {
-              attribute: "is_return",
-              value: "false",
-              operator: "eq",
-            },
-          ],
+          type: { label: "Tieu chuan", description: "Giao hang trong 3-5 ngay.", code: "standard" },
+          prices: buildPrices(shippingStandardPrice, freeShipStandardThreshold, region.id),
+          rules: shippingRules,
+        },
+        {
+          name: "Giao hang hoa toc",
+          price_type: "flat",
+          provider_id: "manual_manual",
+          service_zone_id: zoneHCM!.id,
+          shipping_profile_id: shippingProfile.id,
+          type: { label: "Hoa toc", description: "Giao hang trong vong 4 gio (chi ap dung tai TP.HCM).", code: "express" },
+          prices: buildPrices(shippingExpressPrice, freeShipExpressThreshold, region.id),
+          rules: shippingRules,
         },
       ],
     });
+
+    // Workflow always creates new type records — deduplicate by code.
+    // List all types, keep first per code (canonical), delete duplicates.
+    // For options using a duplicate type, remap them to canonical using shipping_option_type_id.
+    const allTypes = await fulfillmentModuleService.listShippingOptionTypes({});
+    const allOptions = await fulfillmentModuleService.listShippingOptions({});
+    const typeById = new Map(allTypes.map((t) => [t.id, t]));
+    const canonicalByCode = new Map<string, string>(); // code → canonical type id
+
+    // Sort so newest types (from this seed run) are canonical — orphaned old types become duplicates
+    const optionTypeIds = new Set(
+      allOptions.map((o) => (o as any).shipping_option_type_id as string).filter(Boolean)
+    );
+    // Prioritize types that are actually used by options
+    const sortedTypes = [
+      ...allTypes.filter((t) => optionTypeIds.has(t.id)),
+      ...allTypes.filter((t) => !optionTypeIds.has(t.id)),
+    ];
+
+    const duplicateTypeIds: string[] = [];
+    for (const t of sortedTypes) {
+      if (!canonicalByCode.has(t.code)) {
+        canonicalByCode.set(t.code, t.id);
+      } else {
+        duplicateTypeIds.push(t.id);
+      }
+    }
+
+    if (duplicateTypeIds.length) {
+      for (const opt of allOptions) {
+        const typeId = (opt as any).shipping_option_type_id as string | undefined;
+        if (typeId && duplicateTypeIds.includes(typeId)) {
+          const dupeType = typeById.get(typeId);
+          if (dupeType) {
+            const canonicalId = canonicalByCode.get(dupeType.code)!;
+            // Use shipping_option_type_id directly to update FK without creating new type
+            await fulfillmentModuleService.updateShippingOptions(
+              opt.id,
+              { shipping_option_type_id: canonicalId } as any
+            );
+          }
+        }
+      }
+      await fulfillmentModuleService.deleteShippingOptionTypes(duplicateTypeIds);
+      logger.info(`Deduplicated ${duplicateTypeIds.length} shipping option type(s).`);
+    }
   }
   logger.info("Finished seeding VN fulfillment data.");
 

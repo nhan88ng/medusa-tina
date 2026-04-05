@@ -87,8 +87,7 @@ export const defaultTemplates: DefaultTemplate[] = [
                 <p style="margin:0;color:#333;font-size:14px;line-height:1.5;">
                   {{shipping_address.first_name}} {{shipping_address.last_name}}<br>
                   {{shipping_address.address_1}}<br>
-                  {{#if shipping_address.address_2}}{{shipping_address.address_2}}<br>{{/if}}
-                  {{shipping_address.city}}, {{shipping_address.province}} {{shipping_address.postal_code}}<br>
+                  {{shipping_address.city}}{{#if shipping_address.province}}, {{shipping_address.province}}{{/if}}{{#if shipping_address.postal_code}} {{shipping_address.postal_code}}{{/if}}<br>
                   {{#if shipping_address.phone}}ĐT: {{shipping_address.phone}}{{/if}}
                 </p>
               </div>

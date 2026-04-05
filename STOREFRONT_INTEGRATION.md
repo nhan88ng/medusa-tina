@@ -418,3 +418,165 @@ type EntityContent = {
   content: string | null
 }
 ```
+
+---
+
+## Vietnamese Address API
+
+Cascading dropdown để khách chọn địa chỉ VN (2 cấp: Tỉnh/TP → Phường/Xã).
+
+### Endpoints
+
+```
+GET /store/vn-address/provinces
+GET /store/vn-address/wards?province_code={code}
+```
+
+Không cần header auth hay publishable key.
+
+### Response format
+
+```typescript
+// GET /store/vn-address/provinces
+{
+  provinces: [
+    { code: "79", codename: "vn-sg", name: "Thành phố Hồ Chí Minh" },
+    { code: "01", codename: "vn-hn", name: "Thành phố Hà Nội" },
+    // ...63 tỉnh/TP
+  ]
+}
+
+// GET /store/vn-address/wards?province_code=79
+{
+  wards: [
+    { code: "26734", name: "Phường Tân Định" },
+    { code: "26740", name: "Phường Bến Nghé" },
+    // ...tất cả phường/xã của tỉnh đó
+  ]
+}
+```
+
+### Mapping vào Medusa address fields
+
+```typescript
+// Khi khách submit form địa chỉ, map như sau:
+const address = {
+  country_code: "vn",
+  province: selectedProvince.codename,   // e.g. "vn-sg" — dùng cho shipping zone matching
+  city: selectedWard.name,               // e.g. "Phường Bến Nghé"
+  address_1: streetAddress,              // e.g. "123 Nguyễn Huệ"
+  postal_code: postalCode || "",
+  // Lưu code để tra cứu sau
+  metadata: {
+    province_code: selectedProvince.code,
+    province_name: selectedProvince.name,
+    ward_code: selectedWard.code,
+    ward_name: selectedWard.name,
+  },
+}
+```
+
+> **Quan trọng:** Trường `province` phải dùng `codename` (e.g. `"vn-sg"`) để Medusa matching đúng shipping zone TP.HCM. Nếu province là `"vn-sg"`, khách sẽ thấy cả Giao hàng tiêu chuẩn và Giao hàng hoả tốc. Tỉnh khác chỉ thấy Giao hàng tiêu chuẩn.
+
+### Ví dụ React
+
+```tsx
+const [provinces, setProvinces] = useState([])
+const [wards, setWards] = useState([])
+const [selectedProvince, setSelectedProvince] = useState(null)
+
+useEffect(() => {
+  fetch("/store/vn-address/provinces")
+    .then(r => r.json())
+    .then(d => setProvinces(d.provinces))
+}, [])
+
+const handleProvinceChange = async (province) => {
+  setSelectedProvince(province)
+  setWards([])
+  const res = await fetch(`/store/vn-address/wards?province_code=${province.code}`)
+  const data = await res.json()
+  setWards(data.wards)
+}
+```
+
+---
+
+## Shipping Options
+
+### Cấu trúc shipping
+
+| Phương thức | Vùng | Phí mặc định | Freeship |
+|---|---|---|---|
+| Giao hàng tiêu chuẩn (3-5 ngày) | Toàn quốc | 30,000 VND | Đơn ≥ 300,000 VND |
+| Giao hàng hoả tốc (4h) | Chỉ TP.HCM | 50,000 VND | Đơn ≥ 500,000 VND |
+
+Medusa tự lọc shipping options dựa trên `province` trong shipping address của cart.
+
+### Thay đổi phí ship
+
+Phí ship được cấu hình qua ENV vars (chỉ áp dụng khi chạy seed):
+```env
+SHIPPING_STANDARD_PRICE=30000
+SHIPPING_EXPRESS_PRICE=50000
+FREE_SHIP_STANDARD_THRESHOLD=300000
+FREE_SHIP_EXPRESS_THRESHOLD=500000
+```
+
+Để thay đổi phí sau khi đã seed: Admin UI → **Settings → Locations → [Kho Hà Nội] → Shipping Options**.
+
+---
+
+## Promotions (Mã giảm giá)
+
+### Áp dụng promo code vào cart
+
+```typescript
+// Áp dụng mã giảm giá
+const res = await fetch(`/store/carts/${cartId}/promotions`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "x-publishable-api-key": PUBLISHABLE_KEY,
+  },
+  body: JSON.stringify({ code: "WELCOME10" }),
+})
+const { cart } = await res.json()
+
+// Xoá mã giảm giá
+await fetch(`/store/carts/${cartId}/promotions`, {
+  method: "DELETE",
+  headers: {
+    "Content-Type": "application/json",
+    "x-publishable-api-key": PUBLISHABLE_KEY,
+  },
+  body: JSON.stringify({ code: "WELCOME10" }),
+})
+```
+
+### Cart response sau khi apply promotion
+
+```typescript
+// Discount hiển thị trong cart.discount_total
+// Chi tiết adjustments trong từng item:
+cart.items[0].adjustments = [
+  {
+    id: "adj_xxx",
+    amount: -25000,           // số tiền giảm
+    promotion_id: "prm_xxx",
+    code: "WELCOME10",
+  }
+]
+```
+
+### Promotions mẫu (seed)
+
+Chạy `npx medusa exec src/scripts/seed-promotions.ts` để tạo:
+
+| Code | Loại | Giá trị |
+|---|---|---|
+| `WELCOME10` | % off toàn đơn | Giảm 10% |
+| `FREESHIP` | Miễn phí ship | Giảm tối đa 50,000 VND phí ship |
+| `50KOFF` | Số tiền cố định | Giảm 50,000 VND (chỉ VND) |
+
+Tạo thêm promotions: Admin UI → **Promotions → Create**.
