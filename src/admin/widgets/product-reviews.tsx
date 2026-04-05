@@ -68,19 +68,19 @@ const ProductReviewsWidget = ({
       <div className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center gap-2">
           <StarSolid className="text-ui-fg-subtle" />
-          <Text className="font-medium">Đánh giá sản phẩm</Text>
+          <Text className="font-medium">Product Reviews</Text>
         </div>
         <Link
           to={`/reviews?product_id=${product.id}`}
           className="text-ui-fg-interactive text-sm hover:underline"
         >
-          Xem tất cả
+          View all
         </Link>
       </div>
 
       <div className="px-6 py-4">
         {isLoading ? (
-          <Text className="text-ui-fg-subtle text-sm">Đang tải...</Text>
+          <Text className="text-ui-fg-subtle text-sm">Loading...</Text>
         ) : (
           <div className="flex items-center gap-4">
             <div className="text-center">
@@ -89,12 +89,12 @@ const ProductReviewsWidget = ({
               </Text>
               <StarRating rating={data?.average_rating ?? 0} />
               <Text className="text-ui-fg-subtle text-xs mt-1">
-                {data?.total_count ?? 0} đánh giá
+                {data?.total_count ?? 0} reviews
               </Text>
             </div>
             {pendingCount > 0 && (
               <Badge color="orange">
-                {pendingCount} chờ duyệt
+                {pendingCount} pending
               </Badge>
             )}
           </div>
@@ -114,10 +114,10 @@ const ProductReviewsWidget = ({
                 </div>
                 <Badge color={statusColor[review.status]} size="2xsmall">
                   {review.status === "pending"
-                    ? "Chờ duyệt"
+                    ? "Pending"
                     : review.status === "approved"
-                    ? "Đã duyệt"
-                    : "Từ chối"}
+                    ? "Approved"
+                    : "Rejected"}
                 </Badge>
               </div>
               <Text size="small" className="text-ui-fg-subtle line-clamp-2">

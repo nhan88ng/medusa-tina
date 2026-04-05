@@ -65,12 +65,12 @@ const OrderBankTransferWidget = ({
         method: "POST",
       }),
     onSuccess: () => {
-      toast.success("Đã xác nhận thanh toán thành công!")
+      toast.success("Payment confirmed successfully!")
       queryClient.invalidateQueries({ queryKey: ["order-payment", order.id] })
       queryClient.invalidateQueries({ queryKey: ["order", order.id] })
     },
     onError: () => {
-      toast.error("Xác nhận thất bại. Vui lòng thử lại.")
+      toast.error("Confirmation failed. Please try again.")
     },
   })
 
@@ -81,27 +81,27 @@ const OrderBankTransferWidget = ({
       <div className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center gap-2">
           <CurrencyDollar className="text-ui-fg-subtle" />
-          <Text className="font-medium">Thanh toán chuyển khoản</Text>
+          <Text className="font-medium">Bank Transfer Payment</Text>
         </div>
         {capturedPayment ? (
           <Badge color="green" className="flex items-center gap-1">
             <CheckCircle />
-            Đã xác nhận
+            Confirmed
           </Badge>
         ) : (
-          <Badge color="orange">Chờ xác nhận</Badge>
+          <Badge color="orange">Pending Confirmation</Badge>
         )}
       </div>
 
       {!capturedPayment && (
         <div className="px-6 py-4 space-y-3">
           <Text className="text-ui-fg-subtle text-sm">
-            Khách hàng đã chọn thanh toán chuyển khoản. Sau khi kiểm tra tài
-            khoản ngân hàng và xác nhận đã nhận tiền, bấm nút bên dưới.
+            Customer has selected bank transfer payment. After checking your
+            bank account and confirming receipt, click the button below.
           </Text>
           <div className="bg-ui-bg-subtle rounded-md p-3 text-sm">
             <p className="text-ui-fg-subtle">
-              Nội dung chuyển khoản: <strong>TINA {order.id.slice(-8).toUpperCase()}</strong>
+              Transfer reference: <strong>TINA {order.id.slice(-8).toUpperCase()}</strong>
             </p>
           </div>
           {pendingPayment ? (
@@ -111,11 +111,11 @@ const OrderBankTransferWidget = ({
               isLoading={isCapturing}
               onClick={() => capturePayment(pendingPayment.id)}
             >
-              Xác nhận đã nhận tiền
+              Confirm Payment Received
             </Button>
           ) : (
             <Text className="text-ui-fg-muted text-sm italic">
-              Chưa có giao dịch thanh toán để xác nhận.
+              No pending payment to confirm.
             </Text>
           )}
         </div>

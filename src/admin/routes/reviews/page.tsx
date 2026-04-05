@@ -32,9 +32,9 @@ type ReviewsResponse = {
 }
 
 const statusLabel: Record<string, string> = {
-  pending: "Chờ duyệt",
-  approved: "Đã duyệt",
-  rejected: "Từ chối",
+  pending: "Pending",
+  approved: "Approved",
+  rejected: "Rejected",
 }
 
 const statusColor: Record<string, "orange" | "green" | "red"> = {
@@ -78,23 +78,23 @@ const ReviewsPage = () => {
       }),
     onSuccess: (_, { status }) => {
       toast.success(
-        status === "approved" ? "Đã duyệt đánh giá!" : "Đã từ chối đánh giá."
+        status === "approved" ? "Review approved!" : "Review rejected."
       )
       queryClient.invalidateQueries({ queryKey: ["reviews"] })
       setSelectedReview(null)
     },
-    onError: () => toast.error("Thao tác thất bại. Vui lòng thử lại."),
+    onError: () => toast.error("Action failed. Please try again."),
   })
 
   const { mutate: deleteReview, isPending: isDeleting } = useMutation({
     mutationFn: (id: string) =>
       sdk.client.fetch(`/admin/reviews/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      toast.success("Đã xóa đánh giá.")
+      toast.success("Review deleted.")
       queryClient.invalidateQueries({ queryKey: ["reviews"] })
       setSelectedReview(null)
     },
-    onError: () => toast.error("Xóa thất bại."),
+    onError: () => toast.error("Delete failed."),
   })
 
   const reviews = data?.reviews ?? []
@@ -104,9 +104,9 @@ const ReviewsPage = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <Text className="text-xl font-semibold">Đánh giá sản phẩm</Text>
+          <Text className="text-xl font-semibold">Product Reviews</Text>
           <Text className="text-ui-fg-subtle text-sm mt-1">
-            {data?.count ?? 0} đánh giá tổng cộng
+            {data?.count ?? 0} reviews total
           </Text>
         </div>
         <Select
@@ -118,10 +118,10 @@ const ReviewsPage = () => {
             <Select.Value />
           </Select.Trigger>
           <Select.Content>
-            <Select.Item value="all">Tất cả</Select.Item>
-            <Select.Item value="pending">Chờ duyệt</Select.Item>
-            <Select.Item value="approved">Đã duyệt</Select.Item>
-            <Select.Item value="rejected">Từ chối</Select.Item>
+            <Select.Item value="all">All</Select.Item>
+            <Select.Item value="pending">Pending</Select.Item>
+            <Select.Item value="approved">Approved</Select.Item>
+            <Select.Item value="rejected">Rejected</Select.Item>
           </Select.Content>
         </Select>
       </div>
@@ -131,11 +131,11 @@ const ReviewsPage = () => {
         <Container className="flex-1 p-0 divide-y">
           {isLoading ? (
             <div className="p-6 text-center">
-              <Text className="text-ui-fg-subtle">Đang tải...</Text>
+              <Text className="text-ui-fg-subtle">Loading...</Text>
             </div>
           ) : reviews.length === 0 ? (
             <div className="p-6 text-center">
-              <Text className="text-ui-fg-subtle">Không có đánh giá nào.</Text>
+              <Text className="text-ui-fg-subtle">No reviews found.</Text>
             </div>
           ) : (
             reviews.map((review) => (
@@ -181,7 +181,7 @@ const ReviewsPage = () => {
                     </Text>
                   </div>
                   <Text size="xsmall" className="text-ui-fg-muted shrink-0">
-                    {new Date(review.created_at).toLocaleDateString("vi-VN")}
+                    {new Date(review.created_at).toLocaleDateString("en-US")}
                   </Text>
                 </div>
               </div>
@@ -193,7 +193,7 @@ const ReviewsPage = () => {
         {selectedReview && (
           <Container className="w-80 shrink-0 p-0 divide-y self-start">
             <div className="px-6 py-4">
-              <Text weight="plus">Chi tiết đánh giá</Text>
+              <Text weight="plus">Review Details</Text>
             </div>
             <div className="px-6 py-4 space-y-3">
               <div>
@@ -202,7 +202,7 @@ const ReviewsPage = () => {
                   weight="plus"
                   className="text-ui-fg-subtle mb-1"
                 >
-                  Người đánh giá
+                  Reviewer
                 </Text>
                 <Text size="small">
                   {selectedReview.first_name} {selectedReview.last_name}
@@ -214,7 +214,7 @@ const ReviewsPage = () => {
                   weight="plus"
                   className="text-ui-fg-subtle mb-1"
                 >
-                  Đánh giá
+                  Rating
                 </Text>
                 <StarRating rating={selectedReview.rating} />
               </div>
@@ -225,7 +225,7 @@ const ReviewsPage = () => {
                     weight="plus"
                     className="text-ui-fg-subtle mb-1"
                   >
-                    Tiêu đề
+                    Title
                   </Text>
                   <Text size="small">{selectedReview.title}</Text>
                 </div>
@@ -236,7 +236,7 @@ const ReviewsPage = () => {
                   weight="plus"
                   className="text-ui-fg-subtle mb-1"
                 >
-                  Nội dung
+                  Content
                 </Text>
                 <Text size="small" className="leading-relaxed">
                   {selectedReview.content}
@@ -249,7 +249,7 @@ const ReviewsPage = () => {
                     weight="plus"
                     className="text-ui-fg-subtle mb-1"
                   >
-                    Ảnh ({selectedReview.images.length})
+                    Images ({selectedReview.images.length})
                   </Text>
                   <div className="flex flex-wrap gap-2">
                     {selectedReview.images.map((url, i) => (
@@ -269,7 +269,7 @@ const ReviewsPage = () => {
                   weight="plus"
                   className="text-ui-fg-subtle mb-1"
                 >
-                  Trạng thái
+                  Status
                 </Text>
                 <Badge color={statusColor[selectedReview.status]}>
                   {statusLabel[selectedReview.status]}
@@ -289,7 +289,7 @@ const ReviewsPage = () => {
                     })
                   }
                 >
-                  Duyệt đánh giá
+                  Approve
                 </Button>
               )}
               {selectedReview.status !== "rejected" && (
@@ -304,7 +304,7 @@ const ReviewsPage = () => {
                     })
                   }
                 >
-                  Từ chối
+                  Reject
                 </Button>
               )}
               <Button
@@ -313,7 +313,7 @@ const ReviewsPage = () => {
                 isLoading={isDeleting}
                 onClick={() => deleteReview(selectedReview.id)}
               >
-                Xóa đánh giá
+                Delete Review
               </Button>
             </div>
           </Container>
@@ -324,7 +324,7 @@ const ReviewsPage = () => {
 }
 
 export const config = defineRouteConfig({
-  label: "Đánh giá",
+  label: "Reviews",
   icon: StarSolid,
 })
 
