@@ -119,6 +119,13 @@ class MeilisearchModuleService {
     }
   }
 
+  async resetIndex(): Promise<void> {
+    const client = await this.getClient()
+    await client.deleteIndexIfExists(this.productIndex_)
+    this.logger_.info(`[meilisearch] Deleted index: ${this.productIndex_}`)
+    await this.configureIndex()
+  }
+
   async getStats() {
     try {
       const index = await this.getIndex()

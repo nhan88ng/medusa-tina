@@ -1,6 +1,6 @@
 import { defineRouteConfig } from "@medusajs/admin-sdk"
 import { MagnifyingGlass } from "@medusajs/icons"
-import { Container, Text, Button, toast } from "@medusajs/ui"
+import { Container, Text, Button, toast, usePrompt } from "@medusajs/ui"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { sdk } from "../../lib/client"
 
@@ -20,6 +20,7 @@ type SyncResponse = {
 
 const SearchPage = () => {
   const queryClient = useQueryClient()
+  const prompt = usePrompt()
 
   const { data, isLoading } = useQuery({
     queryKey: ["meilisearch-stats"],
@@ -37,8 +38,28 @@ const SearchPage = () => {
       toast.success(result.message)
       queryClient.invalidateQueries({ queryKey: ["meilisearch-stats"] })
     },
-    onError: () => toast.error("Đồng bộ thất bại. Kiểm tra kết nối MeiliSearch."),
+    onError: () => toast.error("Sync failed. Check MeiliSearch connection."),
   })
+
+  const { mutate: resetIndex, isPending: isResetting } = useMutation({
+    mutationFn: () =>
+      sdk.client.fetch("/admin/meilisearch/reset", { method: "DELETE" }),
+    onSuccess: () => {
+      toast.success("Index deleted successfully")
+      queryClient.invalidateQueries({ queryKey: ["meilisearch-stats"] })
+    },
+    onError: () => toast.error("Failed to delete index."),
+  })
+
+  const handleReset = async () => {
+    const confirmed = await prompt({
+      title: "Delete MeiliSearch index?",
+      description: "All data in the index will be removed. You will need to sync again afterwards.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+    })
+    if (confirmed) resetIndex()
+  }
 
   const stats = data?.stats
 
@@ -47,60 +68,75 @@ const SearchPage = () => {
       <div>
         <Text className="text-xl font-semibold">MeiliSearch</Text>
         <Text className="text-ui-fg-subtle text-sm mt-1">
-          Quản lý chỉ mục tìm kiếm sản phẩm
+          Manage product search index
         </Text>
       </div>
 
       <Container className="divide-y p-0">
         <div className="px-6 py-4">
-          <Text weight="plus">Trạng thái chỉ mục</Text>
+          <Text weight="plus">Index Status</Text>
         </div>
         <div className="px-6 py-4 grid grid-cols-3 gap-6">
           <div>
             <Text size="small" className="text-ui-fg-subtle">
-              Sản phẩm đã index
+              Indexed products
             </Text>
             <Text className="text-2xl font-bold mt-1">
-              {isLoading ? "—" : (stats?.numberOfDocuments ?? 0).toLocaleString("vi-VN")}
+              {isLoading ? "—" : (stats?.numberOfDocuments ?? 0).toLocaleString()}
             </Text>
           </div>
           <div>
             <Text size="small" className="text-ui-fg-subtle">
-              Trạng thái
+              Status
             </Text>
             <Text className="mt-1 font-medium">
               {isLoading
-                ? "Đang tải..."
+                ? "Loading..."
                 : stats
                 ? stats.isIndexing
-                  ? "⏳ Đang indexing..."
-                  : "✅ Sẵn sàng"
-                : "❌ Không kết nối được"}
+                  ? "⏳ Indexing..."
+                  : "✅ Ready"
+                : "❌ Disconnected"}
             </Text>
           </div>
           <div>
             <Text size="small" className="text-ui-fg-subtle">
-              Cập nhật lần cuối
+              Last updated
             </Text>
             <Text className="mt-1">
               {stats?.lastUpdate
-                ? new Date(stats.lastUpdate).toLocaleString("vi-VN")
+                ? new Date(stats.lastUpdate).toLocaleString()
                 : "—"}
             </Text>
           </div>
         </div>
-        <div className="px-6 py-4">
-          <Button
-            variant="secondary"
-            size="small"
-            isLoading={isSyncing}
-            onClick={() => syncAll()}
-          >
-            Đồng bộ lại toàn bộ sản phẩm
-          </Button>
-          <Text size="xsmall" className="text-ui-fg-muted mt-2">
-            Sản phẩm mới/cập nhật được tự động sync. Dùng nút này khi cần re-index toàn bộ.
-          </Text>
+        <div className="px-6 py-4 flex flex-col gap-4">
+          <div>
+            <Button
+              variant="secondary"
+              size="small"
+              isLoading={isSyncing}
+              onClick={() => syncAll()}
+            >
+              Re-sync all products
+            </Button>
+            <Text size="xsmall" className="text-ui-fg-muted mt-2">
+              New/updated products are synced automatically. Use this to force a full re-index.
+            </Text>
+          </div>
+          <div>
+            <Button
+              variant="danger"
+              size="small"
+              isLoading={isResetting}
+              onClick={handleReset}
+            >
+              Delete index
+            </Button>
+            <Text size="xsmall" className="text-ui-fg-muted mt-2">
+              Removes all data from the index. Re-sync after deleting.
+            </Text>
+          </div>
         </div>
       </Container>
     </div>
@@ -108,7 +144,7 @@ const SearchPage = () => {
 }
 
 export const config = defineRouteConfig({
-  label: "Tìm kiếm",
+  label: "Search",
   icon: MagnifyingGlass,
 })
 
