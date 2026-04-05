@@ -488,7 +488,7 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
     });
 
     let freeshipUpdated = 0;
-    for (const opt of optionsWithPrices) {
+    for (const opt of optionsWithPrices as any[]) {
       const hasFreeship = (opt.prices || []).some((p: any) => p.amount === 0);
       if (!hasFreeship) {
         const isExpress = opt.name === "Giao hàng hoả tốc";
