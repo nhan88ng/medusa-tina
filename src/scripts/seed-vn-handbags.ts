@@ -20,6 +20,7 @@ import {
   createSalesChannelsWorkflow,
   createShippingOptionsWorkflow,
   createShippingProfilesWorkflow,
+  updateShippingOptionsWorkflow,
   createStockLocationsWorkflow,
   createTaxRegionsWorkflow,
   linkSalesChannelsToApiKeyWorkflow,
@@ -244,6 +245,29 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
     process.env.FREE_SHIP_EXPRESS_THRESHOLD || "500000"
   );
 
+  // Helper: build prices array with optional freeship rule
+  const buildPrices = (basePrice: number, freeThreshold: number, regionId: string) => {
+    const prices: any[] = [
+      { currency_code: "vnd", amount: basePrice },
+      { region_id: regionId, amount: basePrice },
+    ];
+    if (freeThreshold > 0) {
+      prices.push(
+        {
+          currency_code: "vnd",
+          amount: 0,
+          rules: [{ attribute: "item_total", operator: "gte" as RuleOperatorType, value: freeThreshold }],
+        },
+        {
+          region_id: regionId,
+          amount: 0,
+          rules: [{ attribute: "item_total", operator: "gte" as RuleOperatorType, value: freeThreshold }],
+        }
+      );
+    }
+    return prices;
+  };
+
   // Check zones AND shipping option counts to avoid unnecessary recreation.
   // Expected: "Giao hàng toàn quốc" (1 option) + "Giao hàng TP.HCM" (2 options).
   const existingZones = await fulfillmentModuleService.listServiceZones({
@@ -356,29 +380,6 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
       (z) => z.name === "Giao hàng TP.HCM"
     );
 
-    // Build prices with optional free shipping rule
-    const buildPrices = (basePrice: number, freeThreshold: number, regionId: string) => {
-      const prices: any[] = [
-        { currency_code: "vnd", amount: basePrice },
-        { region_id: regionId, amount: basePrice },
-      ];
-      if (freeThreshold > 0) {
-        prices.push(
-          {
-            currency_code: "vnd",
-            amount: 0,
-            rules: [{ attribute: "item_total", operator: "gte" as RuleOperatorType, value: freeThreshold }],
-          },
-          {
-            region_id: regionId,
-            amount: 0,
-            rules: [{ attribute: "item_total", operator: "gte" as RuleOperatorType, value: freeThreshold }],
-          }
-        );
-      }
-      return prices;
-    };
-
     const shippingRules: { attribute: string; operator: RuleOperatorType; value: string }[] = [
       { attribute: "enabled_in_store", value: "true", operator: "eq" },
       { attribute: "is_return", value: "false", operator: "eq" },
@@ -467,6 +468,46 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
       logger.info(`Deduplicated ${duplicateTypeIds.length} shipping option type(s).`);
     }
   }
+
+  // --- Ensure freeship rules exist on all shipping options ---
+  // Runs regardless of whether we just created or skipped the structure.
+  // Catches cases where options were manually recreated via Admin UI without freeship rules.
+  const currentZones = await fulfillmentModuleService.listServiceZones({
+    name: ["Giao hàng toàn quốc", "Giao hàng TP.HCM"],
+  });
+  const zoneToanQuocCurrent = currentZones.find((z) => z.name === "Giao hàng toàn quốc");
+  const zoneHCMCurrent = currentZones.find((z) => z.name === "Giao hàng TP.HCM");
+
+  if (zoneToanQuocCurrent && zoneHCMCurrent) {
+    const { data: optionsWithPrices } = await query.graph({
+      entity: "shipping_option",
+      fields: ["id", "name", "prices.*"],
+      filters: {
+        service_zone_id: [zoneToanQuocCurrent.id, zoneHCMCurrent.id],
+      },
+    });
+
+    let freeshipUpdated = 0;
+    for (const opt of optionsWithPrices) {
+      const hasFreeship = (opt.prices || []).some((p: any) => p.amount === 0);
+      if (!hasFreeship) {
+        const isExpress = opt.name === "Giao hàng hoả tốc";
+        const basePrice = isExpress ? shippingExpressPrice : shippingStandardPrice;
+        const threshold = isExpress ? freeShipExpressThreshold : freeShipStandardThreshold;
+        await updateShippingOptionsWorkflow(container).run({
+          input: [{ id: opt.id, prices: buildPrices(basePrice, threshold, region.id) }],
+        });
+        freeshipUpdated++;
+        logger.info(`Added freeship rules to "${opt.name}".`);
+      }
+    }
+    if (freeshipUpdated === 0) {
+      logger.info("Freeship rules already present on all shipping options.");
+    } else {
+      logger.info(`Updated freeship rules on ${freeshipUpdated} shipping option(s).`);
+    }
+  }
+
   logger.info("Finished seeding VN fulfillment data.");
 
   await linkSalesChannelsToStockLocationWorkflow(container).run({
