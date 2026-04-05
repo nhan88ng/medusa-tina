@@ -1,4 +1,4 @@
-import { CreateInventoryLevelInput, ExecArgs } from "@medusajs/framework/types";
+import { CreateInventoryLevelInput, ExecArgs, RuleOperatorType } from "@medusajs/framework/types";
 import {
   ContainerRegistrationKeys,
   Modules,
@@ -255,10 +255,10 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
   let hasCorrectStructure = false;
   if (zoneToanQuocExisting && zoneHCMExisting) {
     const optionsToanQuoc = await fulfillmentModuleService.listShippingOptions({
-      service_zone_id: [zoneToanQuocExisting.id],
+      service_zone: { id: [zoneToanQuocExisting.id] },
     });
     const optionsHCM = await fulfillmentModuleService.listShippingOptions({
-      service_zone_id: [zoneHCMExisting.id],
+      service_zone: { id: [zoneHCMExisting.id] },
     });
     // Correct: toan quoc has 1 option, HCM has 2 options (standard + express)
     hasCorrectStructure = optionsToanQuoc.length === 1 && optionsHCM.length === 2;
@@ -282,7 +282,7 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
       });
       if (oldServiceZones.length) {
         const oldShippingOptions = await fulfillmentModuleService.listShippingOptions({
-          service_zone_id: oldServiceZones.map((z) => z.id),
+          service_zone: { id: oldServiceZones.map((z) => z.id) },
         });
         if (oldShippingOptions.length) {
           await fulfillmentModuleService.deleteShippingOptions(
@@ -367,19 +367,19 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
           {
             currency_code: "vnd",
             amount: 0,
-            rules: [{ attribute: "item_total", operator: "gte", value: freeThreshold }],
+            rules: [{ attribute: "item_total", operator: "gte" as RuleOperatorType, value: freeThreshold }],
           },
           {
             region_id: regionId,
             amount: 0,
-            rules: [{ attribute: "item_total", operator: "gte", value: freeThreshold }],
+            rules: [{ attribute: "item_total", operator: "gte" as RuleOperatorType, value: freeThreshold }],
           }
         );
       }
       return prices;
     };
 
-    const shippingRules = [
+    const shippingRules: { attribute: string; operator: RuleOperatorType; value: string }[] = [
       { attribute: "enabled_in_store", value: "true", operator: "eq" },
       { attribute: "is_return", value: "false", operator: "eq" },
     ];
