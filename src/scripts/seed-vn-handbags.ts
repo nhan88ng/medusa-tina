@@ -245,12 +245,12 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
   );
 
   // Check zones AND shipping option counts to avoid unnecessary recreation.
-  // Expected: "Giao hang toan quoc" (1 option) + "Giao hang TP.HCM" (2 options).
+  // Expected: "Giao hàng toàn quốc" (1 option) + "Giao hàng TP.HCM" (2 options).
   const existingZones = await fulfillmentModuleService.listServiceZones({
-    name: ["Giao hang toan quoc", "Giao hang TP.HCM"],
+    name: ["Giao hàng toàn quốc", "Giao hàng TP.HCM"],
   });
-  const zoneToanQuocExisting = existingZones.find((z) => z.name === "Giao hang toan quoc");
-  const zoneHCMExisting = existingZones.find((z) => z.name === "Giao hang TP.HCM");
+  const zoneToanQuocExisting = existingZones.find((z) => z.name === "Giao hàng toàn quốc");
+  const zoneHCMExisting = existingZones.find((z) => z.name === "Giao hàng TP.HCM");
 
   let hasCorrectStructure = false;
   if (zoneToanQuocExisting && zoneHCMExisting) {
@@ -270,7 +270,7 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
   } else {
     // Cleanup old fulfillment set if exists (e.g. from previous seed with different structure)
     const oldFulfillmentSets = await fulfillmentModuleService.listFulfillmentSets({
-      name: "Giao hang Viet Nam",
+      name: ["Giao hàng Việt Nam", "Giao hang Viet Nam"],
     });
     if (oldFulfillmentSets.length) {
       logger.info("Old shipping structure detected — migrating to 2-zone structure...");
@@ -312,11 +312,11 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
     }
 
     fulfillmentSet = await fulfillmentModuleService.createFulfillmentSets({
-      name: "Giao hang Viet Nam",
+      name: "Giao hàng Việt Nam",
       type: "shipping",
       service_zones: [
         {
-          name: "Giao hang toan quoc",
+          name: "Giao hàng toàn quốc",
           geo_zones: [
             {
               country_code: "vn",
@@ -325,7 +325,7 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
           ],
         },
         {
-          name: "Giao hang TP.HCM",
+          name: "Giao hàng TP.HCM",
           geo_zones: [
             {
               country_code: "vn",
@@ -350,10 +350,10 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
       fulfillment_set: { id: fulfillmentSet.id },
     });
     const zoneToanQuoc = serviceZones.find(
-      (z) => z.name === "Giao hang toan quoc"
+      (z) => z.name === "Giao hàng toàn quốc"
     );
     const zoneHCM = serviceZones.find(
-      (z) => z.name === "Giao hang TP.HCM"
+      (z) => z.name === "Giao hàng TP.HCM"
     );
 
     // Build prices with optional free shipping rule
@@ -386,35 +386,35 @@ export default async function seedVnHandbags({ container }: ExecArgs) {
 
     await createShippingOptionsWorkflow(container).run({
       input: [
-        // Zone: Giao hang toan quoc — standard only
+        // Zone: Giao hàng toàn quốc — standard only
         {
-          name: "Giao hang tieu chuan",
+          name: "Giao hàng tiêu chuẩn",
           price_type: "flat",
           provider_id: "manual_manual",
           service_zone_id: zoneToanQuoc!.id,
           shipping_profile_id: shippingProfile.id,
-          type: { label: "Tieu chuan", description: "Giao hang trong 3-5 ngay.", code: "standard" },
+          type: { label: "Tiêu Chuẩn", description: "Giao hàng trong 3-5 ngày.", code: "standard" },
           prices: buildPrices(shippingStandardPrice, freeShipStandardThreshold, region.id),
           rules: shippingRules,
         },
-        // Zone: Giao hang TP.HCM — standard + express
+        // Zone: Giao hàng TP.HCM — standard + express
         {
-          name: "Giao hang tieu chuan",
+          name: "Giao hàng tiêu chuẩn",
           price_type: "flat",
           provider_id: "manual_manual",
           service_zone_id: zoneHCM!.id,
           shipping_profile_id: shippingProfile.id,
-          type: { label: "Tieu chuan", description: "Giao hang trong 3-5 ngay.", code: "standard" },
+          type: { label: "Tiêu Chuẩn", description: "Giao hàng trong 3-5 ngày.", code: "standard" },
           prices: buildPrices(shippingStandardPrice, freeShipStandardThreshold, region.id),
           rules: shippingRules,
         },
         {
-          name: "Giao hang hoa toc",
+          name: "Giao hàng hoả tốc",
           price_type: "flat",
           provider_id: "manual_manual",
           service_zone_id: zoneHCM!.id,
           shipping_profile_id: shippingProfile.id,
-          type: { label: "Hoa toc", description: "Giao hang trong vong 4 gio (chi ap dung tai TP.HCM).", code: "express" },
+          type: { label: "Hoả Tốc", description: "Giao hàng trong vòng 4 giờ (chỉ áp dụng tại TP.HCM).", code: "express" },
           prices: buildPrices(shippingExpressPrice, freeShipExpressThreshold, region.id),
           rules: shippingRules,
         },
