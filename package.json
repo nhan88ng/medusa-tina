@@ -60,5 +60,8 @@
   "engines": {
     "node": ">=20"
   },
+  "overrides": {
+    "@aws-sdk/client-s3": "3.726.1"
+  },
   "packageManager": "npm@11.11.1"
 }
