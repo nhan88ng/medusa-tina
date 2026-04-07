@@ -12,6 +12,9 @@ This document describes all custom modules built on top of this Medusa backend a
 | **SEO Metadata** | Per-entity SEO fields (title, description, OG tags, etc.) linked to products, categories, collections, and brands |
 | **Entity Content** | Rich text (HTML) content linked to products, categories, and collections |
 | **Email Template** | Admin-managed email templates (Handlebars HTML) with enable/disable per template |
+| **Product Review** | Customer reviews with rating, moderation (pending/approved/rejected), and average rating |
+| **Wishlist** | Customer wishlist with toggle behavior (add/remove per product) |
+| **MeiliSearch** | Full-text product search with Vietnamese language support, filtering, and sorting |
 
 All store endpoints are **public** (no auth required) and require the `x-publishable-api-key` header. Use the Medusa JS SDK — it handles this automatically.
 
@@ -381,11 +384,227 @@ Fires automatically when a customer registers. No storefront action needed — b
 - [ ] Brand list → safe to cache with `staleTime: Infinity` (changes rarely)
 - [ ] All custom routes → use `sdk.client.fetch()`, never raw `fetch()`
 - [ ] `seo_metadata` and `entity_content` can be `null` — always guard before rendering
+- [ ] **Reviews** → show star rating + review list on product detail page
+- [ ] **Reviews** → review submission form (requires customer login)
+- [ ] **Reviews** → handle `"pending"` status — inform customer their review is awaiting moderation
+- [ ] **Wishlist** → heart/bookmark toggle on product cards (requires customer login)
+- [ ] **Wishlist** → dedicated wishlist page at `/account/wishlist`
+- [ ] **Search** → search bar using `/store/search` endpoint, handle `503` gracefully
+- [ ] **Search** → category/collection filtering and sort options
 - [ ] **Email: Abandoned cart** → collect cart email early (`sdk.store.cart.update`) before checkout completes
 - [ ] **Email: Review request** → implement `/account/orders/:id` page with review UI per line item
 - [ ] **Email: Password reset** → implement `/account/reset-password?token=&email=` page with reset form
 - [ ] **Email: All links** → set `STORE_CORS` env var on backend to production storefront domain
 - [ ] **Email: Welcome** → ensure storefront home page is publicly accessible at `STORE_CORS`
+
+---
+
+## Module: Product Review
+
+Customer reviews with star rating and admin moderation. Only **approved** reviews are shown on the storefront.
+
+### Data shape
+
+```typescript
+type Review = {
+  id: string
+  product_id: string
+  customer_id: string | null
+  rating: number            // 1–5
+  title: string | null
+  content: string
+  first_name: string
+  last_name: string
+  status: "pending" | "approved" | "rejected"
+  images: string[] | null   // array of image URLs
+  created_at: string
+  updated_at: string
+}
+```
+
+### Store API endpoints
+
+#### List approved reviews for a product
+
+```
+GET /store/products/:id/reviews?limit=20&offset=0
+```
+
+Response:
+```json
+{
+  "reviews": [ { ...Review } ],
+  "count": 42,
+  "limit": 20,
+  "offset": 0,
+  "average_rating": 4.3,
+  "total_count": 42
+}
+```
+
+#### Submit a review (requires authentication)
+
+```
+POST /store/products/:id/reviews
+```
+
+Body:
+```json
+{
+  "rating": 5,
+  "content": "Sản phẩm rất tốt!",
+  "first_name": "Ngọc",
+  "last_name": "Trần",
+  "title": "Rất hài lòng",
+  "images": ["https://..."]
+}
+```
+
+- `rating` (1–5) and `content` are required. `title` and `images` are optional.
+- New reviews have status `"pending"` — they only appear after admin approval.
+- A confirmation email (`review-submitted`) is sent automatically.
+
+### Usage patterns
+
+```typescript
+// Fetch reviews (public, no auth)
+const data = await sdk.client.fetch<{
+  reviews: Review[]
+  average_rating: number
+  total_count: number
+  count: number
+}>(`/store/products/${productId}/reviews?limit=10`)
+
+// Submit a review (requires logged-in customer)
+const { review } = await sdk.client.fetch<{ review: Review }>(
+  `/store/products/${productId}/reviews`,
+  { method: "POST", body: { rating: 5, content: "Great!", first_name: "An", last_name: "Nguyen" } }
+)
+```
+
+---
+
+## Module: Wishlist
+
+Per-customer product wishlist. POST toggles: if the product is already in the wishlist, it gets removed.
+
+### Store API endpoints (all require authentication)
+
+#### Get wishlist
+
+```
+GET /store/customers/me/wishlist
+```
+
+Response:
+```json
+{
+  "wishlist_items": [
+    {
+      "id": "wish_01...",
+      "customer_id": "cus_01...",
+      "product_id": "prod_01...",
+      "product": { "id": "prod_01...", "title": "...", "handle": "...", "thumbnail": "...", "variants": [...] }
+    }
+  ]
+}
+```
+
+#### Add / Toggle wishlist item
+
+```
+POST /store/customers/me/wishlist
+```
+
+Body:
+```json
+{ "product_id": "prod_01..." }
+```
+
+- If product is **not** in wishlist → adds it, returns `{ "wishlist_item": {...}, "added": true }`
+- If product is **already** in wishlist → removes it, returns `{ ..., "added": false }`
+
+#### Remove from wishlist
+
+```
+DELETE /store/customers/me/wishlist/:product_id
+```
+
+### Usage patterns
+
+```typescript
+// Get wishlist
+const { wishlist_items } = await sdk.client.fetch<{ wishlist_items: WishlistItem[] }>(
+  "/store/customers/me/wishlist"
+)
+
+// Toggle wishlist (add or remove)
+const result = await sdk.client.fetch<{ added: boolean }>(
+  "/store/customers/me/wishlist",
+  { method: "POST", body: { product_id: "prod_01..." } }
+)
+
+// Explicit remove
+await sdk.client.fetch(`/store/customers/me/wishlist/${productId}`, { method: "DELETE" })
+```
+
+---
+
+## Module: MeiliSearch (Product Search)
+
+Full-text search powered by MeiliSearch with Vietnamese language support.
+
+### Store API endpoint
+
+```
+GET /store/search?q=túi xách&limit=20&offset=0&category_id=...&collection_id=...&sort=price:asc
+```
+
+Response:
+```json
+{
+  "hits": [
+    {
+      "id": "prod_01...",
+      "title": "Túi xách da",
+      "handle": "tui-xach-da",
+      "thumbnail": "https://...",
+      "description": "...",
+      "status": "published",
+      "category_ids": ["pcat_01..."],
+      "collection_id": "pcol_01...",
+      "variants": [...]
+    }
+  ],
+  "total": 15,
+  "limit": 20,
+  "offset": 0,
+  "query": "túi xách"
+}
+```
+
+Query params:
+- `q` — search query (supports Vietnamese)
+- `limit` / `offset` — pagination
+- `category_id` — filter by category
+- `collection_id` — filter by collection
+- `sort` — e.g. `price:asc`, `price:desc`, `created_at:desc`
+
+### Usage patterns
+
+```typescript
+// Basic search
+const { hits, total } = await sdk.client.fetch<{ hits: Product[]; total: number }>(
+  `/store/search?q=${encodeURIComponent(query)}&limit=20`
+)
+
+// Filtered search
+const { hits } = await sdk.client.fetch<{ hits: Product[]; total: number }>(
+  `/store/search?q=&category_id=${categoryId}&sort=price:asc`
+)
+```
+
+> **Note:** Search returns `503` if MeiliSearch is unavailable. Handle this gracefully in the storefront.
 
 ---
 
@@ -416,6 +635,28 @@ type SeoMetadata = {
 type EntityContent = {
   id: string
   content: string | null
+}
+
+type Review = {
+  id: string
+  product_id: string
+  customer_id: string | null
+  rating: number
+  title: string | null
+  content: string
+  first_name: string
+  last_name: string
+  status: "pending" | "approved" | "rejected"
+  images: string[] | null
+  created_at: string
+  updated_at: string
+}
+
+type WishlistItem = {
+  id: string
+  customer_id: string
+  product_id: string
+  product: Product | null  // enriched with product data on GET
 }
 ```
 
