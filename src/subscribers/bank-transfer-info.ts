@@ -29,7 +29,7 @@ export default async function sendBankTransferInfoEmail({
 
     const isBankTransfer = order.payment_collections?.some((pc: any) =>
       pc.payment_sessions?.some(
-        (ps: any) => ps.provider_id === "pp_bank-transfer_bank-transfer"
+        (ps: any) => ps.provider_id?.includes("bank-transfer")
       )
     )
 

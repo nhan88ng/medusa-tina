@@ -22,23 +22,15 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     { take: limit, skip: offset, order: { created_at: "DESC" } }
   )
 
-  const allApproved = await reviewService.listReviews({
-    product_id,
-    status: "approved",
-  })
-
-  const average_rating =
-    allApproved.length > 0
-      ? allApproved.reduce((sum, r) => sum + r.rating, 0) / allApproved.length
-      : 0
+  const stats = await reviewService.getAverageRating(product_id)
 
   res.json({
     reviews,
     count,
     limit,
     offset,
-    average_rating: Math.round(average_rating * 10) / 10,
-    total_count: allApproved.length,
+    average_rating: stats.average,
+    total_count: stats.count,
   })
 }
 
