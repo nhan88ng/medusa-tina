@@ -608,6 +608,44 @@ const { hits } = await sdk.client.fetch<{ hits: Product[]; total: number }>(
 
 ---
 
+## Module: Custom Payments (COD & Bank Transfer)
+
+Hệ thống hỗ trợ 2 phương thức thanh toán manual tuỳ chỉnh. Frontend cần cấu hình UI hiển thị phù hợp cho luồng Checkout.
+
+### 1. Thanh toán khi nhận hàng (COD)
+- **ID Provider**: Thường là `cod` (hoặc `pp_cod_cod` tuỳ cấu hình lúc Seed).
+- Luồng Cart: Người dùng chọn COD, checkout bình thường.
+- Không cần hiển thị thông tin gì thêm, trạng thái đơn hàng sẽ chờ admin xử lý (Awaiting Payment).
+
+### 2. Chuyển khoản ngân hàng (Bank Transfer)
+- **ID Provider**: `bank-transfer` (hoặc `pp_bank-transfer_bank-transfer`).
+- Khi Frontend gọi API khởi tạo `PaymentSession` để chọn phương thức `bank-transfer`, Server sẽ trả về cục `data` chứa thông tin Ngân hàng của Shop để Frontend render.
+
+**Dữ liệu trả về Frontend có dạng:**
+```json
+{
+  "payment_session": {
+    "id": "...",
+    "provider_id": "bank-transfer",
+    "data": {
+      "method": "bank-transfer",
+      "bank_name": "Vietcombank",
+      "account_number": "1122334455",
+      "account_holder": "TINA SHOP",
+      "bank_branch": "Hà Nội",
+      "amount": 500000,
+      "currency_code": "vnd"
+    }
+  }
+}
+```
+
+**Storefront Requirements:**
+- Ở trang **Checkout (bước Payment)** hoặc trang **Order Status (Thành công)**, Frontend hãy parse trường `data` trong Payment Session hiện tại nếu ID là Bank Transfer để vẽ một box hiển thị "Vui lòng chuyển khoản vào số tài khoản: ... Ngân hàng: ... Chủ tk: ..." cùng mã đơn hàng (Order Display ID) làm nội dung chuyển khoản.
+- Việc gửi **Email Thông tin chuyển khoản** cho khách hàng đã được Backend xử lý ngầm (Subscriber). Frontend không cần làm gì thêm ở bước gửi thư.
+
+---
+
 ## Complete Type Reference
 
 ```typescript
