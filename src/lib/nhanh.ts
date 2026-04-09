@@ -93,7 +93,7 @@ export async function fetchNhanhCategories() {
   try {
     const response = await fetch(`${NHANH_API_BASE}/product/category?appId=${appId}&businessId=${businessId}`, {
       method: "POST",
-      headers: { "Authorization": accessToken, "Content-Type": "application/json" },
+      headers: { "Authorization": accessToken ?? "", "Content-Type": "application/json" },
       body: JSON.stringify({}),
     });
     const json = await response.json();
@@ -109,7 +109,7 @@ export async function fetchNhanhBrands() {
   try {
     const response = await fetch(`${NHANH_API_BASE}/product/brand?appId=${appId}&businessId=${businessId}`, {
       method: "POST",
-      headers: { "Authorization": accessToken, "Content-Type": "application/json" },
+      headers: { "Authorization": accessToken ?? "", "Content-Type": "application/json" },
       body: JSON.stringify({}),
     });
     const json = await response.json();
