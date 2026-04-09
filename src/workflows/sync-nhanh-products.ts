@@ -580,24 +580,6 @@ export const forceSetVariantThumbnailsStep = createStep(
      });
      const dbProducts = await query as any[];
 
-     // Query existing variant-image links to avoid duplicates
-     const allVariantIds = dbProducts.flatMap((p: any) => (p.variants || []).map((v: any) => v.id)).filter(Boolean);
-     const existingLinks = new Set<string>();
-     if (allVariantIds.length > 0) {
-         const existingQuery = remoteQuery({
-             entryPoint: "product_variant",
-             fields: ["id", "images.id"],
-             variables: { filters: { id: allVariantIds } }
-         });
-         const existingVariants = await existingQuery as any[];
-         existingVariants.forEach((v: any) => {
-             (v.images || []).forEach((img: any) => {
-                 existingLinks.add(`${v.id}::${img.id}`);
-             });
-         });
-     }
-
-     const linksToBuild: any[] = [];
      const thumbnailUpdates: any[] = [];
 
      for (const dbProd of dbProducts) {
@@ -634,38 +616,10 @@ export const forceSetVariantThumbnailsStep = createStep(
              }
 
              if (matchedImage) {
-                 const linkKey = `${v.id}::${matchedImage.id}`;
-                 if (!existingLinks.has(linkKey)) {
-                     linksToBuild.push({ variant_id: v.id, image_id: matchedImage.id });
-                 }
                  thumbnailUpdates.push({ id: v.id, thumbnail: matchedImage.url });
              }
          }
      }
-
-     // Link images to variants in small batches
-     console.log(`[Sync] linksToBuild count: ${linksToBuild.length}, thumbnailUpdates count: ${thumbnailUpdates.length}`);
-     let linkedCount = 0;
-     const BATCH_SIZE = 20;
-     for (let i = 0; i < linksToBuild.length; i += BATCH_SIZE) {
-         const batch = linksToBuild.slice(i, i + BATCH_SIZE);
-         try {
-             await productService.addImageToVariant(batch);
-             linkedCount += batch.length;
-         } catch (e: any) {
-             console.error(`[Sync] addImageToVariant batch ${i}-${i + batch.length} error:`, e.message, e.stack?.substring(0, 300));
-             // Try one by one as fallback
-             for (const link of batch) {
-                 try {
-                     await productService.addImageToVariant([link]);
-                     linkedCount++;
-                 } catch (innerErr: any) {
-                     console.error(`[Sync] addImageToVariant single failed: variant=${link.variant_id} image=${link.image_id}: ${innerErr.message}`);
-                 }
-             }
-         }
-     }
-     console.log(`[Sync] Linked ${linkedCount}/${linksToBuild.length} images to variants.`);
 
      // Update variant thumbnails one by one
      let thumbCount = 0;
