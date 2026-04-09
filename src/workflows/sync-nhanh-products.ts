@@ -632,8 +632,8 @@ export const forceSetVariantThumbnailsStep = createStep(
          }
      }
 
-     console.log(`[Sync] Variant images: ${linkedCount} new links, ${thumbCount} thumbnails updated.`);
-     return new StepResponse({ done: true, linked: linkedCount, thumbnails: thumbCount });
+     console.log(`[Sync] Variant thumbnails updated: ${thumbCount}`);
+     return new StepResponse({ done: true, thumbnails: thumbCount });
   }
 );
 

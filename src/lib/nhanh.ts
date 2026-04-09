@@ -66,7 +66,7 @@ export async function fetchNhanhProductDetail(productId: string | number) {
     const response = await fetch(`${NHANH_API_BASE}/product/detail?appId=${appId}&businessId=${businessId}`, {
       method: "POST",
       headers: {
-        "Authorization": accessToken,
+        "Authorization": accessToken ?? "",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
