@@ -6,9 +6,10 @@ import {
   toast,
   usePrompt,
 } from "@medusajs/ui"
-import { ArrowLeft, Trash, Spinner } from "@medusajs/icons"
+import { ArrowLeft, Trash, Spinner, Photo } from "@medusajs/icons"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useParams, useNavigate, Link } from "react-router-dom"
+import { useRef } from "react"
 import { sdk } from "../../../lib/client"
 import SeoMetadataSection from "../../../components/seo-metadata-section"
 
@@ -27,6 +28,32 @@ const BrandDetailPage = () => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const prompt = usePrompt()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const uploadLogoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData()
+      formData.append("files", file)
+      const result = await sdk.client.fetch<{ files: { url: string }[] }>("/admin/uploads", {
+        method: "POST",
+        body: formData,
+      })
+      const url = result.files?.[0]?.url
+      if (!url) throw new Error("Upload failed")
+      await sdk.client.fetch(`/admin/brands/${id}`, {
+        method: "POST",
+        body: { logo_url: url },
+      })
+      return url
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["brand", id] })
+      toast.success("Logo updated")
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Upload failed")
+    },
+  })
 
   const { data, isLoading } = useQuery({
     queryFn: () =>
@@ -141,6 +168,54 @@ const BrandDetailPage = () => {
           />
         </Container>
       )}
+
+      {/* Media / Logo */}
+      <Container className="divide-y p-0">
+        <div className="flex items-center justify-between px-6 py-4">
+          <Text size="small" leading="compact" weight="plus">Media</Text>
+          <Button
+            size="small"
+            variant="secondary"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadLogoMutation.isPending}
+          >
+            <Photo />
+            {brand.logo_url ? "Replace Logo" : "Upload Logo"}
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) uploadLogoMutation.mutate(file)
+              e.target.value = ""
+            }}
+          />
+        </div>
+        <div className="px-6 py-4">
+          {brand.logo_url ? (
+            <div className="flex items-center gap-4">
+              <img
+                src={brand.logo_url}
+                alt={`${brand.name} logo`}
+                className="h-24 w-24 rounded-md object-contain border border-ui-border-base"
+              />
+              <div className="flex flex-col gap-1">
+                <Text size="small" leading="compact" weight="plus">Logo</Text>
+                <Text size="small" leading="compact" className="text-ui-fg-muted break-all">
+                  {brand.logo_url}
+                </Text>
+              </div>
+            </div>
+          ) : (
+            <Text size="small" leading="compact" className="text-ui-fg-subtle">
+              No logo uploaded. Click "Upload Logo" to add one.
+            </Text>
+          )}
+        </div>
+      </Container>
 
       {/* Products linked to this brand */}
       <Container className="divide-y p-0">
