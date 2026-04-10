@@ -1,6 +1,6 @@
 import { defineWidgetConfig } from "@medusajs/admin-sdk"
 import { DetailWidgetProps } from "@medusajs/framework/types"
-import { Container, Text, Button, toast } from "@medusajs/ui"
+import { Container, Heading, Text, Button, toast } from "@medusajs/ui"
 import { Photo } from "@medusajs/icons"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useRef } from "react"

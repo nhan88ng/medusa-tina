@@ -7,6 +7,17 @@ import { ENTITY_CONTENT_MODULE } from "../modules/entity-content";
 // --- STEP: Sync Categories ---
 export const syncNhanhCategoriesStep = createStep("sync-nhanh-cats", async (input: void, { container }) => {
    const cats = await fetchNhanhCategories();
+   // DEBUG: log raw category data to verify content/description fields
+   const catsWithRawContent = cats.filter((c: any) => c.content);
+   console.log(`[Sync:DEBUG] Categories with content: ${catsWithRawContent.length}/${cats.length}`);
+   if (catsWithRawContent.length > 0) {
+       console.log("[Sync:DEBUG] Sample category with content:", JSON.stringify({
+           id: catsWithRawContent[0].id,
+           name: catsWithRawContent[0].name,
+           description: catsWithRawContent[0].description,
+           content: catsWithRawContent[0].content?.substring(0, 200),
+       }, null, 2));
+   }
    const productModule = container.resolve(Modules.PRODUCT);
    
    const idMap: Record<number, string> = {};
@@ -34,13 +45,12 @@ export const syncNhanhCategoriesStep = createStep("sync-nhanh-cats", async (inpu
        let handle = c.code ? String(c.code).toLowerCase().replace(/[^a-z0-9]/g, '-') : slugify(c.name || `cat-${c.id}`);
        const cleanName = c.name ? String(c.name).toLowerCase().trim() : "";
        
-       const mapMeta = { 
-           source: "nhanh", 
-           nhanh_id: c.id, 
+       const mapMeta = {
+           source: "nhanh",
+           nhanh_id: c.id,
            image_url: c.image || null,
            content: c.content || null
        };
-       const description = c.content?.replace(/<[^>]*>?/gm, '') || c.name;
 
        // 1. Direct DB probe for handle
        const existingByHandle = await productModule.listProductCategories({ handle: handle });
@@ -72,7 +82,6 @@ export const syncNhanhCategoriesStep = createStep("sync-nhanh-cats", async (inpu
                id: matchedCat.id,
                metadata: { ...matchedCat.metadata, source: "nhanh", nhanh_id: c.id, image_url: c.image || matchedCat.metadata?.image_url || null },
            };
-           if (!matchedCat.description && description) updatePayload.description = description;
            toUpdate.push(updatePayload);
        } else {
            // Use systemHandle as it is standard Medusa convention if code is not provided cleanly
@@ -80,7 +89,6 @@ export const syncNhanhCategoriesStep = createStep("sync-nhanh-cats", async (inpu
            toCreate.push({
                name: c.name || "Unknown",
                handle: finalHandle,
-               description: description || undefined,
                is_active: true,
                is_internal: false,
                metadata: mapMeta
@@ -150,9 +158,27 @@ export const syncCategoryContentStep = createStep(
             fields: ["entity_content.*"],
             filters: { id: medusaId },
         });
-        const existingContent = (existing as any)?.[0]?.entity_content;
-        if (existingContent?.id) {
-            await contentService.updateEntityContents(existingContent.id, { content });
+        const rawContent = (existing as any)?.[0]?.entity_content;
+        // entity_content may be array or object depending on query hydration
+        const existingContent = Array.isArray(rawContent) ? rawContent[0] : rawContent;
+        const existingId = existingContent?.id && existingContent.id !== "" ? existingContent.id : null;
+        console.log(`[Sync:DEBUG] cat ${medusaId} rawContent=${JSON.stringify(rawContent)}, existingId=${JSON.stringify(existingId)}`);
+        if (existingId) {
+            try {
+                await contentService.updateEntityContents([{ id: existingId, content }]);
+            } catch {
+                // Stale link — heal: xóa link cũ, tạo entity_content mới, gắn link mới
+                console.warn(`[Sync] Stale link detected for category ${medusaId}, healing...`);
+                await remoteLink.dismiss({
+                    [Modules.PRODUCT]: { product_category_id: medusaId },
+                    [ENTITY_CONTENT_MODULE]: { entity_content_id: existingId },
+                });
+                const [created] = await contentService.createEntityContents([{ content }]);
+                await remoteLink.create({
+                    [Modules.PRODUCT]: { product_category_id: medusaId },
+                    [ENTITY_CONTENT_MODULE]: { entity_content_id: created.id },
+                });
+            }
         } else {
             const [created] = await contentService.createEntityContents([{ content }]);
             await remoteLink.create({
@@ -171,6 +197,12 @@ export const syncCategoryContentStep = createStep(
 // --- STEP: Sync Brands ---
 export const syncNhanhBrandsStep = createStep("sync-nhanh-brands", async (input: void, { container }) => {
    const brands = await fetchNhanhBrands();
+   // DEBUG: log raw brand data to verify what fields Nhanh returns
+   if (brands.length > 0) {
+       console.log("[Sync:DEBUG] Sample Nhanh brand (first 3):", JSON.stringify(brands.slice(0, 3), null, 2));
+   } else {
+       console.log("[Sync:DEBUG] Nhanh returned 0 brands.");
+   }
    let brandModule;
    try {
        brandModule = container.resolve("brand");
@@ -178,7 +210,7 @@ export const syncNhanhBrandsStep = createStep("sync-nhanh-brands", async (input:
        console.log("[Sync] Brand module not found, skipping brand sync.");
        return new StepResponse({ brandMap: {} });
    }
-   
+
    const idMap: Record<number, string> = {}; 
 
    const slugify = (text: string) => {
@@ -268,6 +300,7 @@ export const fetchAndProcessNhanhProductsStep = createStep(
 
     const processedProducts: any[] = [];
     const skuToQuantityMap: Record<string, number> = {};
+    const contentMap: Record<string, string> = {};
     const globalUniqueSkus = new Set<string>();
 
     for (const p of parentsList) {
@@ -277,6 +310,10 @@ export const fetchAndProcessNhanhProductsStep = createStep(
 
        const isStandalone = detail.parentId === -1;
        const contentHtml = detail.content || "";
+       // DEBUG: log content field presence
+       if (contentHtml) {
+           console.log(`[Sync:DEBUG] Product ${p.id} (${p.name}) has content (${contentHtml.length} chars): ${contentHtml.substring(0, 100)}`);
+       }
 
        // Get variants from list API (more complete data, especially images)
        // Fallback to detail.childs if list API doesn't have them
@@ -307,12 +344,11 @@ export const fetchAndProcessNhanhProductsStep = createStep(
        const medusaProduct: any = {
           external_id: `nhanh-${detail.id}`,
           title: detail.name || "Sản phẩm",
-          description: contentHtml.replace(/<[^>]*>?/gm, '') || detail.description || "",
+          description: detail.description ? detail.description.replace(/<[^>]*>?/gm, '').trim() || undefined : undefined,
           metadata: {
              source: "nhanh",
              nhanh_id: detail.id,
              nhanh_code: detail.code,
-             nhanh_content_html: contentHtml || undefined,
           },
           images: imageObj,
           thumbnail: detail.images?.avatar || undefined,
@@ -416,10 +452,13 @@ export const fetchAndProcessNhanhProductsStep = createStep(
           });
        }
        
+       if (contentHtml) {
+          contentMap[`nhanh-${detail.id}`] = contentHtml;
+       }
        processedProducts.push(medusaProduct);
     }
-    
-    return new StepResponse({ products: processedProducts, skuToQuantityMap });
+
+    return new StepResponse({ products: processedProducts, skuToQuantityMap, contentMap });
   }
 );
 
@@ -514,6 +553,7 @@ export const distributeMedusaProductsStep = createStep(
 
             updated.push({
                 id: medusaP.id,
+                external_id: mapP.external_id,
                 title: mapP.title,
                 description: mapP.description,
                 status: mapP.status,
@@ -766,23 +806,14 @@ export const syncInventoryLevelsStep = createStep("sync-inventory-levels", async
 // --- STEP: Sync Product Content (entity_content module) ---
 export const syncProductContentStep = createStep(
   "sync-product-content",
-  async (input: { createdProducts: any[], updatedProducts: any[], mappedProducts: any[] }, { container }) => {
-    const { createdProducts, updatedProducts, mappedProducts } = input;
+  async (input: { createdProducts: any[], updatedProducts: any[], contentMap: Record<string, string> }, { container }) => {
+    const { createdProducts, updatedProducts, contentMap } = input;
     const contentService = container.resolve(ENTITY_CONTENT_MODULE);
     const remoteLink = container.resolve(ContainerRegistrationKeys.REMOTE_LINK);
     const query = container.resolve(ContainerRegistrationKeys.QUERY);
 
-    // Build external_id -> content HTML map from mapped data
-    const extIdToContent: Record<string, string> = {};
-    mappedProducts.forEach((p: any) => {
-      const html = p.metadata?.nhanh_content_html;
-      if (html && p.external_id) {
-        extIdToContent[p.external_id] = html;
-      }
-    });
-
-    console.log(`[Sync] Products with content from Nhanh: ${Object.keys(extIdToContent).length}`);
-    if (Object.keys(extIdToContent).length === 0) {
+    console.log(`[Sync] Products with content from Nhanh: ${Object.keys(contentMap).length}`);
+    if (Object.keys(contentMap).length === 0) {
       console.log("[Sync] No product content to sync.");
       return new StepResponse({ done: true, synced: 0 });
     }
@@ -794,7 +825,7 @@ export const syncProductContentStep = createStep(
 
     let synced = 0;
     for (const product of allProducts) {
-      const contentHtml = extIdToContent[product.external_id];
+      const contentHtml = contentMap[product.external_id];
       if (!contentHtml) continue;
       if (!product.id) {
         console.warn(`[Sync] Product missing id: external_id=${product.external_id}`);
@@ -808,13 +839,27 @@ export const syncProductContentStep = createStep(
         filters: { id: product.id },
       });
 
-      const existingContent = (existing as any)?.[0]?.entity_content;
+      const rawExisting = (existing as any)?.[0]?.entity_content;
+      const existingContent = Array.isArray(rawExisting) ? rawExisting[0] : rawExisting;
+      const existingId = existingContent?.id && existingContent.id !== "" ? existingContent.id : null;
 
-      if (existingContent?.id) {
-        // Update existing content
-        await contentService.updateEntityContents(existingContent.id, { content: contentHtml });
+      if (existingId) {
+        try {
+          await contentService.updateEntityContents([{ id: existingId, content: contentHtml }]);
+        } catch {
+          // Stale link — heal: xóa link cũ, tạo entity_content mới, gắn link mới
+          console.warn(`[Sync] Stale link detected for product ${product.id}, healing...`);
+          await remoteLink.dismiss({
+            [Modules.PRODUCT]: { product_id: product.id },
+            [ENTITY_CONTENT_MODULE]: { entity_content_id: existingId },
+          });
+          const [created] = await contentService.createEntityContents([{ content: contentHtml }]);
+          await remoteLink.create({
+            [Modules.PRODUCT]: { product_id: product.id },
+            [ENTITY_CONTENT_MODULE]: { entity_content_id: created.id },
+          });
+        }
       } else {
-        // Create new content and link to product
         const [created] = await contentService.createEntityContents([{ content: contentHtml }]);
         await remoteLink.create({
           [Modules.PRODUCT]: { product_id: product.id },
@@ -879,7 +924,7 @@ export const syncNhanhProductsWorkflow = createWorkflow(
     syncProductContentStep({
         createdProducts: createResult as any,
         updatedProducts: splitResult.productsToUpdate,
-        mappedProducts: fetchStepProcess.products
+        contentMap: fetchStepProcess.contentMap
     });
 
     // 10. Sync category content (entity_content module)
