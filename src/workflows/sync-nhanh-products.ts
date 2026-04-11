@@ -4,102 +4,100 @@ import { createProductsWorkflow, updateProductsWorkflow, createRemoteLinkStep } 
 import { Modules, ContainerRegistrationKeys } from "@medusajs/framework/utils";
 import { ENTITY_CONTENT_MODULE } from "../modules/entity-content";
 
+// --- Shared utility ---
+const slugify = (text: string) => {
+    const a = 'àáäâãåăæąçćčđďèéěėëêęğǵḧìíïîįłḿǹńňñòóöôœøṕŕřßşśšșťțùúüûǘůűūųẃẍÿýźžż·/_,:;';
+    const b = 'aaaaaaaaacccddeeeeeeegghiiiiilmnnnnooooooprrsssssttuuuuuuuuuwxyyzzz------';
+    const p = new RegExp(a.split('').join('|'), 'g');
+    return text.toString().toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(p, c => b.charAt(a.indexOf(c)))
+        .replace(/&/g, '-and-')
+        .replace(/[^\w\-]+/g, '')
+        .replace(/\-\-+/g, '-')
+        .replace(/^-+/, '').replace(/-+$/, '');
+};
+
 // --- STEP: Sync Categories ---
 export const syncNhanhCategoriesStep = createStep("sync-nhanh-cats", async (input: void, { container }) => {
    const cats = await fetchNhanhCategories();
-   // DEBUG: log raw category data to verify content/description fields
-   const catsWithRawContent = cats.filter((c: any) => c.content);
-   console.log(`[Sync:DEBUG] Categories with content: ${catsWithRawContent.length}/${cats.length}`);
-   if (catsWithRawContent.length > 0) {
-       console.log("[Sync:DEBUG] Sample category with content:", JSON.stringify({
-           id: catsWithRawContent[0].id,
-           name: catsWithRawContent[0].name,
-           description: catsWithRawContent[0].description,
-           content: catsWithRawContent[0].content?.substring(0, 200),
-       }, null, 2));
-   }
    const productModule = container.resolve(Modules.PRODUCT);
-   
-   const idMap: Record<number, string> = {};
 
+   const idMap: Record<number, string> = {};
    const toCreate: any[] = [];
    const toUpdate: any[] = [];
 
-   // Function to generate a basic slug (matching Medusa's internal style)
-   const slugify = (text: string) => {
-       const a = 'àáäâãåăæąçćčđďèéěėëêęğǵḧìíïîįłḿǹńňñòóöôœøṕŕřßşśšșťțùúüûǘůűūųẃẍÿýźžż·/_,:;';
-       const b = 'aaaaaaaaacccddeeeeeeegghiiiiilmnnnnooooooprrsssssttuuuuuuuuuwxyyzzz------';
-       const p = new RegExp(a.split('').join('|'), 'g');
-       return text.toString().toLowerCase()
-           .replace(/\s+/g, '-')
-           .replace(p, c => b.charAt(a.indexOf(c)))
-           .replace(/&/g, '-and-')
-           .replace(/[^\w\-]+/g, '')
-           .replace(/\-\-+/g, '-')
-           .replace(/^-+/, '').replace(/-+$/, '');
-   };
+   // Load all existing categories once for in-memory matching
+   const allExistingCats = await productModule.listProductCategories({}, { take: 5000 });
+   const catByNhanhId: Record<string, any> = {};
+   const catByHandle: Record<string, any> = {};
+   const catByName: Record<string, any> = {};
+   allExistingCats.forEach(c => {
+       if (c.metadata?.nhanh_id) catByNhanhId[String(c.metadata.nhanh_id)] = c;
+       if (c.handle) catByHandle[c.handle] = c;
+       if (c.name) catByName[c.name.toLowerCase().trim()] = c;
+   });
+
+   // Track handles pending creation to avoid duplicate handle conflicts
+   const pendingHandles: Record<string, number[]> = {};
 
    for (const c of cats) {
-       // Nhanh sometimes has empty 'code', or random acronyms.
-       // The handle should either be the rigorous Nhanh code or a smart slugified name!
-       let handle = c.code ? String(c.code).toLowerCase().replace(/[^a-z0-9]/g, '-') : slugify(c.name || `cat-${c.id}`);
-       const cleanName = c.name ? String(c.name).toLowerCase().trim() : "";
-       
-       const mapMeta = {
-           source: "nhanh",
-           nhanh_id: c.id,
-           image_url: c.image || null,
-           content: c.content || null
-       };
-
-       // 1. Direct DB probe for handle
-       const existingByHandle = await productModule.listProductCategories({ handle: handle });
-       // 2. Direct DB probe for Nhanh's generated Handle if it was generated natively by Medusa
+       const handle = c.code ? String(c.code).toLowerCase().replace(/[^a-z0-9]/g, '-') : slugify(c.name || `cat-${c.id}`);
        const systemHandle = slugify(c.name || "");
-       const existingBySysHandle = systemHandle ? await productModule.listProductCategories({ handle: systemHandle }) : [];
-       
-       // Priority Match
+       const cleanName = c.name ? String(c.name).toLowerCase().trim() : "";
+
+       // Match priority: nhanh_id (metadata) → handle → systemHandle → name
        let matchedCat: any = null;
-       
-       // If we've already matched in loop
        if (idMap[c.id]) {
-            // Already queued, handled inside loop map
-       } else if (existingByHandle.length > 0) {
-           matchedCat = existingByHandle[0];
-       } else if (existingBySysHandle.length > 0) {
-           matchedCat = existingBySysHandle[0];
-       } else {
-           // 3. Fallback: Query by name using q parameter
-           const existingByName = await productModule.listProductCategories({ q: c.name });
-           if (existingByName.length > 0) {
-               matchedCat = existingByName.find(x => x.name.toLowerCase() === cleanName);
-           }
+           // Already matched in this loop
+       } else if (catByNhanhId[String(c.id)]) {
+           matchedCat = catByNhanhId[String(c.id)];
+       } else if (catByHandle[handle]) {
+           matchedCat = catByHandle[handle];
+       } else if (systemHandle && catByHandle[systemHandle]) {
+           matchedCat = catByHandle[systemHandle];
+       } else if (cleanName && catByName[cleanName]) {
+           matchedCat = catByName[cleanName];
        }
 
        if (matchedCat) {
            idMap[c.id] = matchedCat.id;
-           const updatePayload: any = {
+           toUpdate.push({
                id: matchedCat.id,
                metadata: { ...matchedCat.metadata, source: "nhanh", nhanh_id: c.id, image_url: c.image || matchedCat.metadata?.image_url || null },
-           };
-           toUpdate.push(updatePayload);
-       } else {
-           // Use systemHandle as it is standard Medusa convention if code is not provided cleanly
-           const finalHandle = handle || systemHandle || `cat-${c.id}`;
-           toCreate.push({
-               name: c.name || "Unknown",
-               handle: finalHandle,
-               is_active: true,
-               is_internal: false,
-               metadata: mapMeta
            });
+       } else {
+           const finalHandle = handle || systemHandle || `cat-${c.id}`;
+           // Check if this handle is already pending creation (duplicate from Nhanh)
+           if (pendingHandles[finalHandle]) {
+               pendingHandles[finalHandle].push(c.id);
+           } else {
+               pendingHandles[finalHandle] = [c.id];
+               toCreate.push({
+                   name: c.name || "Unknown",
+                   handle: finalHandle,
+                   is_active: true,
+                   is_internal: false,
+                   metadata: {
+                       source: "nhanh",
+                       nhanh_id: c.id,
+                       image_url: c.image || null,
+                   }
+               });
+           }
        }
    }
 
    if (toCreate.length > 0) {
        const created = await productModule.createProductCategories(toCreate);
        created.forEach(c => {
-           if (c.metadata?.nhanh_id) idMap[c.metadata.nhanh_id as number] = c.id;
+           // Map all Nhanh IDs that share this handle to the same Medusa category
+           const handle = c.handle;
+           if (handle && pendingHandles[handle]) {
+               pendingHandles[handle].forEach(nhanhId => {
+                   idMap[nhanhId] = c.id;
+               });
+           }
        });
    }
    
@@ -162,7 +160,6 @@ export const syncCategoryContentStep = createStep(
         // entity_content may be array or object depending on query hydration
         const existingContent = Array.isArray(rawContent) ? rawContent[0] : rawContent;
         const existingId = existingContent?.id && existingContent.id !== "" ? existingContent.id : null;
-        console.log(`[Sync:DEBUG] cat ${medusaId} rawContent=${JSON.stringify(rawContent)}, existingId=${JSON.stringify(existingId)}`);
         if (existingId) {
             try {
                 await contentService.updateEntityContents([{ id: existingId, content }]);
@@ -197,12 +194,6 @@ export const syncCategoryContentStep = createStep(
 // --- STEP: Sync Brands ---
 export const syncNhanhBrandsStep = createStep("sync-nhanh-brands", async (input: void, { container }) => {
    const brands = await fetchNhanhBrands();
-   // DEBUG: log raw brand data to verify what fields Nhanh returns
-   if (brands.length > 0) {
-       console.log("[Sync:DEBUG] Sample Nhanh brand (first 3):", JSON.stringify(brands.slice(0, 3), null, 2));
-   } else {
-       console.log("[Sync:DEBUG] Nhanh returned 0 brands.");
-   }
    let brandModule;
    try {
        brandModule = container.resolve("brand");
@@ -211,62 +202,48 @@ export const syncNhanhBrandsStep = createStep("sync-nhanh-brands", async (input:
        return new StepResponse({ brandMap: {} });
    }
 
-   const idMap: Record<number, string> = {}; 
+   const idMap: Record<number, string> = {};
 
-   const slugify = (text: string) => {
-       const a = 'àáäâãåăæąçćčđďèéěėëêęğǵḧìíïîįłḿǹńňñòóöôœøṕŕřßşśšșťțùúüûǘůűūųẃẍÿýźžż·/_,:;';
-       const b = 'aaaaaaaaacccddeeeeeeegghiiiiilmnnnnooooooprrsssssttuuuuuuuuuwxyyzzz------';
-       const p = new RegExp(a.split('').join('|'), 'g');
-       return text.toString().toLowerCase()
-           .replace(/\s+/g, '-')
-           .replace(p, c => b.charAt(a.indexOf(c)))
-           .replace(/&/g, '-and-')
-           .replace(/[^\w\-]+/g, '')
-           .replace(/\-\-+/g, '-')
-           .replace(/^-+/, '').replace(/-+$/, '');
-   };
+   // Load all existing brands once for in-memory matching
+   const allExistingBrands = await brandModule.listBrands({}, { take: 2000 });
+   const brandByExternalId: Record<string, any> = {};
+   const brandByHandle: Record<string, any> = {};
+   const brandByName: Record<string, any> = {};
+   allExistingBrands.forEach((b: any) => {
+       if (b.external_id) brandByExternalId[b.external_id] = b;
+       if (b.handle) brandByHandle[b.handle] = b;
+       if (b.name) brandByName[String(b.name).toLowerCase().trim()] = b;
+   });
 
    for (const b of brands) {
-       const cleanName = String(b.name).toLowerCase();
+       // Nhanh brand API only returns: id, code, name, status, createdAt
+       const externalId = `nhanh-${b.id}`;
+       const cleanName = String(b.name).toLowerCase().trim();
        const handle = slugify(b.name || `brand-${b.id}`);
-       const description = b.description || b.content?.replace(/<[^>]*>?/gm, '') || "";
-       const content = b.content || "";
-       const logo = b.image || b.logo || null;
 
-       let matchedModel: any = null;
-       
-       // Try DB by Name (since Brand schema has no deep q filter, we can list all or query by handle)
-       const existingByHandle = await brandModule.listBrands({ handle: handle });
-       if (existingByHandle.length > 0) {
-           matchedModel = existingByHandle[0];
-       } else {
-           // fallback brute array scan if necessary for absolute perfect match
-           const allB = await brandModule.listBrands({}, { take: 2000 });
-           matchedModel = allB.find((db: any) => db.name && String(db.name).toLowerCase().trim() === cleanName.trim());
-       }
+       // Match priority: external_id → handle → name
+       const matchedModel = brandByExternalId[externalId] || brandByHandle[handle] || brandByName[cleanName] || null;
 
        if (matchedModel) {
            idMap[b.id] = matchedModel.id;
-           // Update empty fields from Nhanh data
-           const updates: any = {};
-           if (!matchedModel.description && description) updates.description = description;
-           if (!matchedModel.content && content) updates.content = content;
-           if (!matchedModel.logo_url && logo) updates.logo_url = logo;
-           if (Object.keys(updates).length > 0) {
-               await brandModule.updateBrands(matchedModel.id, updates);
+           // Backfill external_id if matched by handle/name but missing external_id
+           if (!matchedModel.external_id && matchedModel.id) {
+               await brandModule.updateBrands({ id: matchedModel.id, external_id: externalId });
            }
        } else {
            const created = await brandModule.createBrands({
                name: b.name,
                handle: handle,
-               description: description || undefined,
-               content: content || undefined,
-               logo_url: logo || undefined,
+               external_id: externalId,
            });
            idMap[b.id] = created.id;
+           // Add to cache so subsequent brands don't duplicate
+           brandByExternalId[externalId] = created;
+           brandByHandle[handle] = created;
+           brandByName[cleanName] = created;
        }
    }
-   
+
    return new StepResponse({ brandMap: idMap });
 });
 
@@ -310,10 +287,6 @@ export const fetchAndProcessNhanhProductsStep = createStep(
 
        const isStandalone = detail.parentId === -1;
        const contentHtml = detail.content || "";
-       // DEBUG: log content field presence
-       if (contentHtml) {
-           console.log(`[Sync:DEBUG] Product ${p.id} (${p.name}) has content (${contentHtml.length} chars): ${contentHtml.substring(0, 100)}`);
-       }
 
        // Get variants from list API (more complete data, especially images)
        // Fallback to detail.childs if list API doesn't have them
@@ -580,9 +553,6 @@ export const distributeMedusaProductsStep = createStep(
             created.push(mapP);
         }
     }
-
-    console.log(`[DEBUG] toUpdate Count: ${updated.length}`);
-    console.log(`[DEBUG] toCreate Count: ${created.length}`);
 
     return new StepResponse({ productsToCreate: created, productsToUpdate: updated, brandLinks: linkRequests });
   }
