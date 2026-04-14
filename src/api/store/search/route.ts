@@ -5,8 +5,11 @@ import { buildSearchFilters } from "./filters"
 import { SearchQueryType } from "./validators"
 
 export async function GET(req: MedusaRequest, res: MedusaResponse) {
-  const { q, limit, offset, category_id, collection_id, sort } =
+  const { q: rawQ, limit, offset, category_id, collection_id, sort } =
     req.validatedQuery as SearchQueryType
+  // Safety net: Zod schema defaults q to "" but validateAndTransformQuery is untested
+  // at integration level — guard against middleware skipping defaults.
+  const q = rawQ ?? ""
 
   let meilisearch: MeilisearchModuleService
   try {

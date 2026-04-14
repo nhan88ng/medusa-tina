@@ -55,4 +55,12 @@ describe("SearchQuerySchema", () => {
     expect(result.success).toBe(true)
     expect(result.data?.q).toBe("")
   })
+
+  it("q is always a string (never undefined) — guards against middleware skipping defaults", () => {
+    // Validates the contract that the route's `q ?? ""` guard relies on:
+    // if the schema is applied correctly, q is "" not undefined.
+    const result = SearchQuerySchema.safeParse({})
+    expect(result.success).toBe(true)
+    expect(typeof result.data?.q).toBe("string")
+  })
 })

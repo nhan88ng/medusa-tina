@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+// Only alphanumeric, hyphens, underscores — no quotes or spaces that could
+// break out of MeiliSearch filter strings and bypass the published-status guard.
 export const SAFE_ID_REGEX = /^[a-zA-Z0-9_-]+$/
 
 export const SearchQuerySchema = z.object({
