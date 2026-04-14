@@ -12,6 +12,7 @@ import { CreateEmailTemplateSchema, UpdateEmailTemplateSchema, TestEmailTemplate
 import { UpdateReviewSchema, GetAdminReviewsSchema } from "./admin/reviews/validators"
 import { CreateStoreReviewSchema } from "./store/products/[id]/reviews/validators"
 import { AddToWishlistSchema } from "./store/customers/me/wishlist/validators"
+import { SearchQuerySchema } from "./store/search/validators"
 
 export default defineMiddlewares({
   routes: [
@@ -99,6 +100,13 @@ export default defineMiddlewares({
       matcher: "/store/customers/me/wishlist",
       method: "POST",
       middlewares: [validateAndTransformBody(AddToWishlistSchema)],
+    },
+
+    // ===== Search (Store) =====
+    {
+      matcher: "/store/search",
+      method: "GET",
+      middlewares: [validateAndTransformQuery(SearchQuerySchema, {})],
     },
   ],
 })

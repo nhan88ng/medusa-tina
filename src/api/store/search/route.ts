@@ -2,18 +2,11 @@ import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { MEILISEARCH_MODULE } from "../../../modules/meilisearch"
 import MeilisearchModuleService from "../../../modules/meilisearch/service"
 import { buildSearchFilters } from "./filters"
-import { SearchQuerySchema } from "./validators"
+import { SearchQueryType } from "./validators"
 
 export async function GET(req: MedusaRequest, res: MedusaResponse) {
-  const parsed = SearchQuerySchema.safeParse(req.query)
-  if (!parsed.success) {
-    return res.status(400).json({
-      message: "Invalid query parameters",
-      errors: parsed.error.flatten().fieldErrors,
-    })
-  }
-
-  const { q, limit, offset, category_id, collection_id, sort } = parsed.data
+  const { q, limit, offset, category_id, collection_id, sort } =
+    req.validatedQuery as SearchQueryType
 
   let meilisearch: MeilisearchModuleService
   try {
