@@ -5,8 +5,11 @@ const MIDDLEWARES_PATH = path.join(__dirname, "../middlewares.ts")
 const content = fs.readFileSync(MIDDLEWARES_PATH, "utf8")
 
 describe("middlewares.ts — search route registration", () => {
-  it("registers /store/search as a GET route", () => {
+  it("registers /store/search matcher", () => {
     expect(content).toMatch(/matcher.*\/store\/search/)
+  })
+
+  it("registers search route as GET method", () => {
     expect(content).toMatch(/method.*GET/)
   })
 
