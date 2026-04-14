@@ -2,14 +2,18 @@ import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { MEILISEARCH_MODULE } from "../../../modules/meilisearch"
 import MeilisearchModuleService from "../../../modules/meilisearch/service"
 import { buildSearchFilters } from "./filters"
+import { SearchQuerySchema } from "./validators"
 
 export async function GET(req: MedusaRequest, res: MedusaResponse) {
-  const q = (req.query.q as string) || ""
-  const limit = Number(req.query.limit) || 20
-  const offset = Number(req.query.offset) || 0
-  const category_id = req.query.category_id as string | undefined
-  const collection_id = req.query.collection_id as string | undefined
-  const sort = req.query.sort as string | undefined
+  const parsed = SearchQuerySchema.safeParse(req.query)
+  if (!parsed.success) {
+    return res.status(400).json({
+      message: "Invalid query parameters",
+      errors: parsed.error.flatten().fieldErrors,
+    })
+  }
+
+  const { q, limit, offset, category_id, collection_id, sort } = parsed.data
 
   let meilisearch: MeilisearchModuleService
   try {
@@ -18,13 +22,9 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     return res.status(503).json({ message: "Search service unavailable" })
   }
 
-  let filterClauses: string[][]
-  try {
-    filterClauses = buildSearchFilters({ category_id, collection_id })
-  } catch {
-    return res.status(400).json({ message: "Invalid filter parameter" })
-  }
-
+  // IDs are already validated by the schema; buildSearchFilters adds the
+  // published status guard and returns the safe array-filter format.
+  const filterClauses = buildSearchFilters({ category_id, collection_id })
   const sortArr = sort ? [sort] : undefined
 
   const results = await meilisearch.searchProducts(q, {
