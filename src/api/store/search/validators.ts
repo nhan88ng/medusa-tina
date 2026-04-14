@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-const SAFE_ID_REGEX = /^[a-zA-Z0-9_-]+$/
+export const SAFE_ID_REGEX = /^[a-zA-Z0-9_-]+$/
 
 export const SearchQuerySchema = z.object({
   q: z.string().default(""),

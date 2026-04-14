@@ -1,6 +1,4 @@
-// Only alphanumeric, hyphens, underscores — no quotes or spaces that could
-// break out of MeiliSearch filter strings.
-const SAFE_ID_REGEX = /^[a-zA-Z0-9_-]+$/
+import { SAFE_ID_REGEX } from "./validators"
 
 function validateId(value: string, field: string): void {
   if (!SAFE_ID_REGEX.test(value)) {
