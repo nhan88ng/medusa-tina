@@ -1,7 +1,4 @@
-import {
-  AbstractPaymentProvider,
-  MedusaError,
-} from "@medusajs/framework/utils"
+import { AbstractPaymentProvider } from "@medusajs/framework/utils"
 import {
   InitiatePaymentInput,
   InitiatePaymentOutput,
@@ -36,7 +33,7 @@ class CodPaymentService extends AbstractPaymentProvider {
     input: InitiatePaymentInput
   ): Promise<InitiatePaymentOutput> {
     return {
-      id: `cod_${Date.now()}`,
+      id: `cod_${crypto.randomUUID()}`,
       data: {
         method: "cod",
         amount: input.amount,

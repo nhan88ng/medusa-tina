@@ -53,7 +53,7 @@ class BankTransferPaymentService extends AbstractPaymentProvider<BankTransferOpt
     input: InitiatePaymentInput
   ): Promise<InitiatePaymentOutput> {
     return {
-      id: `bank_transfer_${Date.now()}`,
+      id: `bank_transfer_${crypto.randomUUID()}`,
       data: {
         method: "bank-transfer",
         amount: input.amount,
