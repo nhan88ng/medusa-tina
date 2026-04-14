@@ -83,8 +83,11 @@ class CodPaymentService extends AbstractPaymentProvider {
   }
 
   async getPaymentStatus(
-    _input: GetPaymentStatusInput
+    input: GetPaymentStatusInput
   ): Promise<GetPaymentStatusOutput> {
+    const data = (input.data ?? {}) as Record<string, unknown>
+    if (data.captured) return { status: "captured" }
+    if (data.canceled) return { status: "canceled" }
     return { status: "authorized" }
   }
 

@@ -46,4 +46,21 @@ describe("CodPaymentService", () => {
       })
     })
   })
+
+  describe("getPaymentStatus", () => {
+    it("returns captured when data.captured is set", async () => {
+      const result = await service.getPaymentStatus({ data: { captured: true } } as any)
+      expect(result.status).toBe("captured")
+    })
+
+    it("returns canceled when data.canceled is set", async () => {
+      const result = await service.getPaymentStatus({ data: { canceled: true } } as any)
+      expect(result.status).toBe("canceled")
+    })
+
+    it("returns authorized by default (COD is auto-authorized on initiation)", async () => {
+      const result = await service.getPaymentStatus({ data: {} } as any)
+      expect(result.status).toBe("authorized")
+    })
+  })
 })
