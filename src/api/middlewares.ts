@@ -103,10 +103,11 @@ export default defineMiddlewares({
     },
 
     // ===== Search (Store) =====
+    // isList: false — returns MeiliSearch hits in a custom shape, not a Medusa paginated list.
     {
       matcher: "/store/search",
       method: "GET",
-      middlewares: [validateAndTransformQuery(SearchQuerySchema, {})],
+      middlewares: [validateAndTransformQuery(SearchQuerySchema, { isList: false })],
     },
   ],
 })
