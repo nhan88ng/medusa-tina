@@ -58,7 +58,7 @@ class MeilisearchModuleService {
   async searchProducts(
     query: string,
     options?: {
-      filters?: string
+      filters?: string | string[][]
       sort?: string[]
       limit?: number
       offset?: number
