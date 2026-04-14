@@ -9,8 +9,10 @@ describe("middlewares.ts — search route registration", () => {
     expect(content).toMatch(/matcher.*\/store\/search/)
   })
 
-  it("registers search route as GET method", () => {
-    expect(content).toMatch(/method.*GET/)
+  it("registers search route as GET method — anchored to the /store/search entry", () => {
+    // Anchors method:GET within 60 chars of the /store/search matcher so a
+    // different GET route elsewhere in the file cannot cause a false positive.
+    expect(content).toMatch(/\/store\/search[\s\S]{0,60}method.*GET/)
   })
 
   it("marks search as isList: false (not a Medusa paginated list)", () => {
