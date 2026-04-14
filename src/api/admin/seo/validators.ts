@@ -1,5 +1,10 @@
 import { z } from "zod"
 
+const safeUrl = z
+  .string()
+  .url()
+  .refine((v) => /^https?:\/\//i.test(v), { message: "Only http/https URLs are allowed" })
+
 export const CreateSeoMetadataSchema = z.object({
   entity_type: z.enum(["product", "brand", "category", "collection"]),
   entity_id: z.string().min(1),
@@ -8,8 +13,8 @@ export const CreateSeoMetadataSchema = z.object({
   meta_keywords: z.string().optional(),
   og_title: z.string().optional(),
   og_description: z.string().optional(),
-  og_image: z.string().optional(),
-  canonical_url: z.string().optional(),
+  og_image: safeUrl.optional(),
+  canonical_url: safeUrl.optional(),
   handle: z.string().optional(),
 })
 
@@ -21,8 +26,8 @@ export const UpdateSeoMetadataSchema = z.object({
   meta_keywords: z.string().optional(),
   og_title: z.string().optional(),
   og_description: z.string().optional(),
-  og_image: z.string().optional(),
-  canonical_url: z.string().optional(),
+  og_image: safeUrl.optional(),
+  canonical_url: safeUrl.optional(),
   handle: z.string().optional(),
 })
 
