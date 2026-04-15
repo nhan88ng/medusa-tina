@@ -869,15 +869,6 @@ export function buildSkuQuantityMapFromList(items: any[]): Record<string, number
 }
 
 /**
- * Returns only the products from `products` that do NOT already exist in Medusa.
- *
- * A product is considered existing if:
- * - Its `external_id` is in `existingExtIds`, OR
- * - Any of its variant SKUs (normalised to UPPER CASE, trimmed) is in `existingSkus`.
- *
- * This is the core filtering rule for the create-only sync mode.
- */
-/**
  * Builds the list of parent-category link updates for the create-only sync.
  *
  * Only categories that were NEWLY CREATED (present in `newlyCreatedIds`) get
@@ -919,6 +910,15 @@ export function buildCatsWithContent(
         .map((c: any) => ({ medusaId: idMap[c.id], content: c.content as string }));
 }
 
+/**
+ * Returns only the products from `products` that do NOT already exist in Medusa.
+ *
+ * A product is considered existing if:
+ * - Its `external_id` is in `existingExtIds`, OR
+ * - Any of its variant SKUs (normalised to UPPER CASE, trimmed) is in `existingSkus`.
+ *
+ * This is the core filtering rule for the create-only sync mode.
+ */
 export function filterNewProducts(
     products: any[],
     existingExtIds: Set<string>,
