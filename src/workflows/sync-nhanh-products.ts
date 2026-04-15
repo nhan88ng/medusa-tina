@@ -863,6 +863,34 @@ export function buildSkuQuantityMapFromList(items: any[]): Record<string, number
     return map;
 }
 
+/**
+ * Returns only the products from `products` that do NOT already exist in Medusa.
+ *
+ * A product is considered existing if:
+ * - Its `external_id` is in `existingExtIds`, OR
+ * - Any of its variant SKUs (normalised to UPPER CASE, trimmed) is in `existingSkus`.
+ *
+ * This is the core filtering rule for the create-only sync mode.
+ */
+export function filterNewProducts(
+    products: any[],
+    existingExtIds: Set<string>,
+    existingSkus: Set<string>
+): any[] {
+    // Normalise both sides so matching is case-insensitive regardless of
+    // how the caller populated the sets.
+    const normExtIds = new Set([...existingExtIds].map((id) => String(id).trim()));
+    const normSkus = new Set([...existingSkus].map((s) => String(s).toUpperCase().trim()));
+
+    return products.filter((p) => {
+        if (p.external_id && normExtIds.has(String(p.external_id).trim())) return false;
+        const hasExistingSku = (p.variants || []).some(
+            (v: any) => v.sku && normSkus.has(String(v.sku).toUpperCase().trim())
+        );
+        return !hasExistingSku;
+    });
+}
+
 // =============================================================================
 // INVENTORY-ONLY WORKFLOW
 // =============================================================================
@@ -1088,26 +1116,10 @@ export const distributeMedusaProductsCreateOnlyStep = createStep(
             existingVariants.map((v: any) => v.sku?.toUpperCase().trim()).filter(Boolean)
         );
 
-        const productsToCreate: any[] = [];
-        const brandLinks: any[] = [];
+        // Delegate filtering to the exported pure function (independently unit-tested).
+        const productsToCreate = filterNewProducts(products, existingExtIds, existingSkus);
 
-        for (const p of products) {
-            const alreadyExists =
-                existingExtIds.has(p.external_id) ||
-                (p.variants || []).some(
-                    (v: any) => v.sku && existingSkus.has(v.sku.toUpperCase().trim())
-                );
-
-            if (alreadyExists) continue;
-
-            productsToCreate.push(p);
-            if (p.mappedBrandId) {
-                // Brand links are created after the product is actually saved,
-                // so we just pass the intent through — linkNewProductsBrandsStep handles it.
-            }
-        }
-
-        return new StepResponse({ productsToCreate, brandLinks });
+        return new StepResponse({ productsToCreate, brandLinks: [] });
     }
 );
 
