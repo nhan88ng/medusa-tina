@@ -980,9 +980,12 @@ export const syncNhanhCategoriesCreateOnlyStep = createStep(
         const productModule = container.resolve(Modules.PRODUCT);
 
         const idMap: Record<number, string> = {};
-        const toCreate: any[] = [];
+        let toCreate: any[] = [];
 
-        const allExistingCats = await productModule.listProductCategories({}, { take: 5000 });
+        const allExistingCats = await productModule.listProductCategories(
+            {},
+            { select: ["id", "handle", "name", "metadata"], take: 5000 }
+        );
         const catByNhanhId: Record<string, any> = {};
         const catByHandle: Record<string, any> = {};
         const catByName: Record<string, any> = {};
@@ -1034,16 +1037,42 @@ export const syncNhanhCategoriesCreateOnlyStep = createStep(
 
         const newlyCreatedIds = new Set<string>();
         if (toCreate.length > 0) {
-            const created = await productModule.createProductCategories(toCreate);
-            created.forEach((c: any) => {
-                const h = c.handle;
-                if (h && pendingHandles[h]) {
-                    pendingHandles[h].forEach((nhanhId: number) => {
-                        idMap[nhanhId] = c.id;
-                        newlyCreatedIds.add(c.id);
-                    });
-                }
-            });
+            // Safety check: some categories may already exist in the DB even if the
+            // in-memory map missed them (e.g. if listProductCategories didn't hydrate
+            // handle/metadata fields). Re-query by handle before creating to avoid
+            // duplicate-handle errors.
+            const handlesToCreate = toCreate.map((c: any) => c.handle);
+            const alreadyExisting = await productModule.listProductCategories(
+                { handle: handlesToCreate },
+                { select: ["id", "handle"], take: handlesToCreate.length + 1 }
+            );
+            if (alreadyExisting.length > 0) {
+                const existingByHandle: Record<string, any> = {};
+                alreadyExisting.forEach((c: any) => { existingByHandle[c.handle] = c; });
+                // Map already-existing ones into idMap and remove from toCreate
+                toCreate = toCreate.filter((cat: any) => {
+                    if (existingByHandle[cat.handle]) {
+                        (pendingHandles[cat.handle] || []).forEach((nhanhId: number) => {
+                            idMap[nhanhId] = existingByHandle[cat.handle].id;
+                        });
+                        return false;
+                    }
+                    return true;
+                });
+            }
+
+            if (toCreate.length > 0) {
+                const created = await productModule.createProductCategories(toCreate);
+                created.forEach((c: any) => {
+                    const h = c.handle;
+                    if (h && pendingHandles[h]) {
+                        pendingHandles[h].forEach((nhanhId: number) => {
+                            idMap[nhanhId] = c.id;
+                            newlyCreatedIds.add(c.id);
+                        });
+                    }
+                });
+            }
         }
 
         // Second pass: link parent categories for NEWLY CREATED categories only.
