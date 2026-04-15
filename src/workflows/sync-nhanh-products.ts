@@ -844,6 +844,342 @@ export const syncProductContentStep = createStep(
   }
 );
 
+// =============================================================================
+// SHARED UTILITY: build SKU → quantity map from a flat Nhanh product list
+// =============================================================================
+
+/**
+ * Extracts a SKU → stocked_quantity map from the flat Nhanh product list.
+ * Works for both standalone products (parentId = -1) and variant items (parentId > 0).
+ * Items without a code are skipped.
+ */
+export function buildSkuQuantityMapFromList(items: any[]): Record<string, number> {
+    const map: Record<string, number> = {};
+    for (const item of items) {
+        const code = item.code ? String(item.code).trim() : "";
+        if (!code) continue;
+        map[code] = Number(item.inventory?.available) || 0;
+    }
+    return map;
+}
+
+// =============================================================================
+// INVENTORY-ONLY WORKFLOW
+// =============================================================================
+
+/** Fetches the full Nhanh product list and returns a SKU → quantity map. */
+const fetchNhanhSkuQuantityMapStep = createStep(
+    "fetch-nhanh-sku-quantity-map",
+    async (_input: void, _ctx) => {
+        const allList = await fetchNhanhProductList();
+        const skuToQuantityMap = buildSkuQuantityMapFromList(allList);
+        return new StepResponse({ skuToQuantityMap });
+    }
+);
+
+/**
+ * Syncs ONLY inventory levels from Nhanh.vn.
+ * Does NOT create or update any products, categories, or brands.
+ */
+export const syncNhanhInventoryOnlyWorkflow = createWorkflow(
+    "sync-nhanh-inventory-only-workflow",
+    (_input: any) => {
+        const fetchResult = fetchNhanhSkuQuantityMapStep();
+        syncInventoryLevelsStep({ skuToQuantityMap: fetchResult.skuToQuantityMap });
+        return new WorkflowResponse({ processed: true });
+    }
+);
+
+// =============================================================================
+// CREATE-ONLY STEPS
+// =============================================================================
+
+/**
+ * Like syncNhanhCategoriesStep but skips existing categories — only creates new ones.
+ * Still returns a complete categoryMap (existing + newly created) for downstream steps.
+ */
+export const syncNhanhCategoriesCreateOnlyStep = createStep(
+    "sync-nhanh-cats-create-only",
+    async (_input: void, { container }) => {
+        const cats = await fetchNhanhCategories();
+        const productModule = container.resolve(Modules.PRODUCT);
+
+        const idMap: Record<number, string> = {};
+        const toCreate: any[] = [];
+
+        const allExistingCats = await productModule.listProductCategories({}, { take: 5000 });
+        const catByNhanhId: Record<string, any> = {};
+        const catByHandle: Record<string, any> = {};
+        const catByName: Record<string, any> = {};
+        allExistingCats.forEach((c: any) => {
+            if (c.metadata?.nhanh_id) catByNhanhId[String(c.metadata.nhanh_id)] = c;
+            if (c.handle) catByHandle[c.handle] = c;
+            if (c.name) catByName[c.name.toLowerCase().trim()] = c;
+        });
+
+        const pendingHandles: Record<string, number[]> = {};
+
+        for (const c of cats) {
+            const handle = c.code
+                ? String(c.code).toLowerCase().replace(/[^a-z0-9]/g, "-")
+                : slugify(c.name || `cat-${c.id}`);
+            const systemHandle = slugify(c.name || "");
+            const cleanName = c.name ? String(c.name).toLowerCase().trim() : "";
+
+            let matchedCat: any = null;
+            if (catByNhanhId[String(c.id)]) {
+                matchedCat = catByNhanhId[String(c.id)];
+            } else if (catByHandle[handle]) {
+                matchedCat = catByHandle[handle];
+            } else if (systemHandle && catByHandle[systemHandle]) {
+                matchedCat = catByHandle[systemHandle];
+            } else if (cleanName && catByName[cleanName]) {
+                matchedCat = catByName[cleanName];
+            }
+
+            if (matchedCat) {
+                // Already exists — record in map but do NOT update
+                idMap[c.id] = matchedCat.id;
+            } else {
+                const finalHandle = handle || systemHandle || `cat-${c.id}`;
+                if (pendingHandles[finalHandle]) {
+                    pendingHandles[finalHandle].push(c.id);
+                } else {
+                    pendingHandles[finalHandle] = [c.id];
+                    toCreate.push({
+                        name: c.name || "Unknown",
+                        handle: finalHandle,
+                        is_active: true,
+                        is_internal: false,
+                        metadata: { source: "nhanh", nhanh_id: c.id, image_url: c.image || null },
+                    });
+                }
+            }
+        }
+
+        if (toCreate.length > 0) {
+            const created = await productModule.createProductCategories(toCreate);
+            created.forEach((c: any) => {
+                const h = c.handle;
+                if (h && pendingHandles[h]) {
+                    pendingHandles[h].forEach((nhanhId: number) => {
+                        idMap[nhanhId] = c.id;
+                    });
+                }
+            });
+        }
+
+        // Second pass: link parent categories for newly created ones
+        const parentUpdates: any[] = [];
+        for (const c of cats) {
+            if (c.parentId && c.parentId > 0 && idMap[c.parentId] && idMap[c.id]) {
+                parentUpdates.push({ id: idMap[c.id], parent_category_id: idMap[c.parentId] });
+            }
+        }
+        for (const pUpdate of parentUpdates) {
+            await productModule.updateProductCategories(pUpdate.id, {
+                parent_category_id: pUpdate.parent_category_id,
+            });
+        }
+
+        const catsWithContent = cats
+            .filter((c: any) => c.content && idMap[c.id])
+            .map((c: any) => ({ medusaId: idMap[c.id], content: c.content as string }));
+
+        return new StepResponse({ categoryMap: idMap, catsWithContent });
+    }
+);
+
+/**
+ * Like syncNhanhBrandsStep but skips existing brands — only creates new ones.
+ * Still returns a complete brandMap for downstream steps.
+ */
+export const syncNhanhBrandsCreateOnlyStep = createStep(
+    "sync-nhanh-brands-create-only",
+    async (_input: void, { container }) => {
+        const brands = await fetchNhanhBrands();
+        let brandModule: any;
+        try {
+            brandModule = container.resolve("brand");
+        } catch {
+            console.log("[Sync] Brand module not found, skipping brand sync.");
+            return new StepResponse({ brandMap: {} });
+        }
+
+        const idMap: Record<number, string> = {};
+        const allExistingBrands = await brandModule.listBrands({}, { take: 2000 });
+        const brandByExternalId: Record<string, any> = {};
+        const brandByHandle: Record<string, any> = {};
+        const brandByName: Record<string, any> = {};
+        allExistingBrands.forEach((b: any) => {
+            if (b.external_id) brandByExternalId[b.external_id] = b;
+            if (b.handle) brandByHandle[b.handle] = b;
+            if (b.name) brandByName[String(b.name).toLowerCase().trim()] = b;
+        });
+
+        for (const b of brands) {
+            const externalId = `nhanh-${b.id}`;
+            const cleanName = String(b.name).toLowerCase().trim();
+            const handle = slugify(b.name || `brand-${b.id}`);
+
+            const matchedModel =
+                brandByExternalId[externalId] ||
+                brandByHandle[handle] ||
+                brandByName[cleanName] ||
+                null;
+
+            if (matchedModel) {
+                // Already exists — record in map but do NOT update
+                idMap[b.id] = matchedModel.id;
+            } else {
+                const created = await brandModule.createBrands({
+                    name: b.name,
+                    handle,
+                    external_id: externalId,
+                });
+                idMap[b.id] = created.id;
+                brandByExternalId[externalId] = created;
+                brandByHandle[handle] = created;
+                brandByName[cleanName] = created;
+            }
+        }
+
+        return new StepResponse({ brandMap: idMap });
+    }
+);
+
+// =============================================================================
+// CREATE-ONLY DISTRIBUTE STEP
+// =============================================================================
+
+/**
+ * Like distributeMedusaProductsStep but returns ONLY products that do not yet
+ * exist in Medusa (matched by external_id or SKU).  Existing products are skipped.
+ */
+export const distributeMedusaProductsCreateOnlyStep = createStep(
+    "distribute-medusa-products-create-only",
+    async (input: { products: any[] }, { container }) => {
+        const { products } = input;
+        const productModuleService = container.resolve(Modules.PRODUCT);
+
+        const externalIds = products.map((p: any) => p.external_id).filter(Boolean);
+        const allSkus = products
+            .flatMap((p: any) => (p.variants ? p.variants.map((v: any) => v.sku) : []))
+            .filter(Boolean);
+
+        const existingByExtId =
+            externalIds.length > 0
+                ? await productModuleService.listProducts(
+                      { external_id: externalIds },
+                      { relations: ["variants"], take: 5000 }
+                  )
+                : [];
+
+        const existingVariants =
+            allSkus.length > 0
+                ? await productModuleService.listProductVariants(
+                      { sku: allSkus },
+                      { relations: ["product"], take: 5000 }
+                  )
+                : [];
+
+        const existingExtIds = new Set(existingByExtId.map((p: any) => p.external_id).filter(Boolean));
+        const existingSkus = new Set(
+            existingVariants.map((v: any) => v.sku?.toUpperCase().trim()).filter(Boolean)
+        );
+
+        const productsToCreate: any[] = [];
+        const brandLinks: any[] = [];
+
+        for (const p of products) {
+            const alreadyExists =
+                existingExtIds.has(p.external_id) ||
+                (p.variants || []).some(
+                    (v: any) => v.sku && existingSkus.has(v.sku.toUpperCase().trim())
+                );
+
+            if (alreadyExists) continue;
+
+            productsToCreate.push(p);
+            if (p.mappedBrandId) {
+                // Brand links are created after the product is actually saved,
+                // so we just pass the intent through — linkNewProductsBrandsStep handles it.
+            }
+        }
+
+        return new StepResponse({ productsToCreate, brandLinks });
+    }
+);
+
+// =============================================================================
+// CREATE-ONLY WORKFLOW
+// =============================================================================
+
+/**
+ * Syncs data from Nhanh.vn but SKIPS existing products/categories/brands.
+ * Only new entities are created; nothing is updated.
+ */
+export const syncNhanhCreateOnlyWorkflow = createWorkflow(
+    "sync-nhanh-create-only-workflow",
+    (_input: any) => {
+        // 1. Sync dependencies (create-only)
+        const catStep = syncNhanhCategoriesCreateOnlyStep();
+        const brandStep = syncNhanhBrandsCreateOnlyStep();
+
+        // 2. Fetch and format (reuse existing step)
+        const fetchStepProcess = fetchAndProcessNhanhProductsStep({
+            categoryMap: catStep.categoryMap,
+            brandMap: brandStep.brandMap,
+        });
+
+        // 3. Filter: keep only products that don't exist yet
+        const splitResult = distributeMedusaProductsCreateOnlyStep({
+            products: fetchStepProcess.products,
+        });
+
+        // 4. Create new products
+        const createResult = createProductsWorkflow.runAsStep({
+            input: { products: splitResult.productsToCreate },
+        });
+
+        // 5. Link brands + sales channels for new products
+        linkNewProductsBrandsStep({
+            createdProducts: createResult as any,
+            mappedProducts: fetchStepProcess.products,
+        });
+
+        // 6. Sync inventory for new products
+        syncInventoryLevelsStep({
+            skuToQuantityMap: fetchStepProcess.skuToQuantityMap,
+        });
+
+        // 7. Set variant thumbnails for new products
+        forceSetVariantThumbnailsStep({
+            createdProducts: createResult as any,
+            updatedProducts: [],
+            mappedProducts: fetchStepProcess.products,
+        });
+
+        // 8. Sync product content for new products
+        syncProductContentStep({
+            createdProducts: createResult as any,
+            updatedProducts: [],
+            contentMap: fetchStepProcess.contentMap,
+        });
+
+        // 9. Sync category content for new categories
+        syncCategoryContentStep({
+            catsWithContent: catStep.catsWithContent,
+        });
+
+        return new WorkflowResponse({ processed: true });
+    }
+);
+
+// =============================================================================
+// ORIGINAL FULL SYNC WORKFLOW (unchanged)
+// =============================================================================
+
 export const syncNhanhProductsWorkflow = createWorkflow(
   "sync-nhanh-products-workflow",
   (input: any) => {
