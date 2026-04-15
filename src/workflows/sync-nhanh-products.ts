@@ -872,6 +872,48 @@ export function buildSkuQuantityMapFromList(items: any[]): Record<string, number
  *
  * This is the core filtering rule for the create-only sync mode.
  */
+/**
+ * Builds the list of parent-category link updates for the create-only sync.
+ *
+ * Only categories that were NEWLY CREATED (present in `newlyCreatedIds`) get
+ * their parent_category_id set.  Pre-existing categories are intentionally
+ * skipped — touching their tree position would be an unintended side-effect of
+ * a create-only operation.
+ */
+export function buildCategoryParentUpdates(
+    cats: any[],
+    idMap: Record<number, string>,
+    newlyCreatedIds: Set<string>
+): Array<{ id: string; parent_category_id: string }> {
+    const updates: Array<{ id: string; parent_category_id: string }> = [];
+    for (const c of cats) {
+        if (!c.parentId || c.parentId <= 0) continue;
+        const medusaId = idMap[c.id];
+        const parentMedusaId = idMap[c.parentId];
+        if (medusaId && parentMedusaId && newlyCreatedIds.has(medusaId)) {
+            updates.push({ id: medusaId, parent_category_id: parentMedusaId });
+        }
+    }
+    return updates;
+}
+
+/**
+ * Builds the list of category-content pairs for the create-only sync.
+ *
+ * Only categories that were NEWLY CREATED (present in `newlyCreatedIds`) are
+ * included.  Pre-existing categories are skipped to avoid overwriting content
+ * that has been manually edited in Medusa.
+ */
+export function buildCatsWithContent(
+    cats: any[],
+    idMap: Record<number, string>,
+    newlyCreatedIds: Set<string>
+): Array<{ medusaId: string; content: string }> {
+    return cats
+        .filter((c: any) => c.content && idMap[c.id] && newlyCreatedIds.has(idMap[c.id]))
+        .map((c: any) => ({ medusaId: idMap[c.id], content: c.content as string }));
+}
+
 export function filterNewProducts(
     products: any[],
     existingExtIds: Set<string>,
@@ -985,6 +1027,7 @@ export const syncNhanhCategoriesCreateOnlyStep = createStep(
             }
         }
 
+        const newlyCreatedIds = new Set<string>();
         if (toCreate.length > 0) {
             const created = await productModule.createProductCategories(toCreate);
             created.forEach((c: any) => {
@@ -992,27 +1035,25 @@ export const syncNhanhCategoriesCreateOnlyStep = createStep(
                 if (h && pendingHandles[h]) {
                     pendingHandles[h].forEach((nhanhId: number) => {
                         idMap[nhanhId] = c.id;
+                        newlyCreatedIds.add(c.id);
                     });
                 }
             });
         }
 
-        // Second pass: link parent categories for newly created ones
-        const parentUpdates: any[] = [];
-        for (const c of cats) {
-            if (c.parentId && c.parentId > 0 && idMap[c.parentId] && idMap[c.id]) {
-                parentUpdates.push({ id: idMap[c.id], parent_category_id: idMap[c.parentId] });
-            }
-        }
+        // Second pass: link parent categories for NEWLY CREATED categories only.
+        // Pre-existing categories are intentionally skipped — restructuring their
+        // tree position is an unintended side-effect of a create-only operation.
+        const parentUpdates = buildCategoryParentUpdates(cats, idMap, newlyCreatedIds);
         for (const pUpdate of parentUpdates) {
             await productModule.updateProductCategories(pUpdate.id, {
                 parent_category_id: pUpdate.parent_category_id,
             });
         }
 
-        const catsWithContent = cats
-            .filter((c: any) => c.content && idMap[c.id])
-            .map((c: any) => ({ medusaId: idMap[c.id], content: c.content as string }));
+        // Only carry content for newly created categories.
+        // Existing categories are skipped to avoid overwriting manually edited content.
+        const catsWithContent = buildCatsWithContent(cats, idMap, newlyCreatedIds);
 
         return new StepResponse({ categoryMap: idMap, catsWithContent });
     }

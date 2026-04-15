@@ -13,7 +13,12 @@ import path from "path"
 // ---------------------------------------------------------------------------
 // We test the extracted utility independently so we can cover edge cases
 // without standing up Medusa infrastructure.
-import { buildSkuQuantityMapFromList, filterNewProducts } from "../sync-nhanh-products"
+import {
+  buildSkuQuantityMapFromList,
+  filterNewProducts,
+  buildCategoryParentUpdates,
+  buildCatsWithContent,
+} from "../sync-nhanh-products"
 
 describe("buildSkuQuantityMapFromList", () => {
   it("maps a standalone product's code → available quantity", () => {
@@ -241,6 +246,105 @@ describe("API route: /admin/nhanh-sync/inventory-only", () => {
 
   it("uses syncNhanhInventoryOnlyWorkflow", () => {
     expect(src).toMatch(/syncNhanhInventoryOnlyWorkflow/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Pure logic: buildCategoryParentUpdates
+// ---------------------------------------------------------------------------
+// Bug fix: parent-linking in the create-only step was running for ALL categories
+// in idMap (including pre-existing ones). It should only run for newly created ones.
+
+describe("buildCategoryParentUpdates", () => {
+  it("returns parent update only for a newly created category", () => {
+    const cats = [{ id: 10, parentId: 1 }]
+    const idMap = { 1: "medusa-parent", 10: "medusa-new-child" }
+    const newlyCreatedIds = new Set(["medusa-new-child"])
+    const updates = buildCategoryParentUpdates(cats, idMap, newlyCreatedIds)
+    expect(updates).toEqual([{ id: "medusa-new-child", parent_category_id: "medusa-parent" }])
+  })
+
+  it("does NOT return a parent update for an existing category", () => {
+    const cats = [{ id: 10, parentId: 1 }]
+    const idMap = { 1: "medusa-parent", 10: "medusa-existing-child" }
+    // medusa-existing-child was matched, not created — absent from newlyCreatedIds
+    const newlyCreatedIds = new Set<string>()
+    const updates = buildCategoryParentUpdates(cats, idMap, newlyCreatedIds)
+    expect(updates).toHaveLength(0)
+  })
+
+  it("skips categories whose parent is not in idMap", () => {
+    const cats = [{ id: 5, parentId: 999 }] // 999 not in idMap
+    const idMap = { 5: "medusa-new" }
+    const newlyCreatedIds = new Set(["medusa-new"])
+    expect(buildCategoryParentUpdates(cats, idMap, newlyCreatedIds)).toHaveLength(0)
+  })
+
+  it("skips root-level categories (parentId <= 0)", () => {
+    const cats = [{ id: 3, parentId: 0 }, { id: 4, parentId: -1 }]
+    const idMap = { 3: "m3", 4: "m4" }
+    const newlyCreatedIds = new Set(["m3", "m4"])
+    expect(buildCategoryParentUpdates(cats, idMap, newlyCreatedIds)).toHaveLength(0)
+  })
+
+  it("handles mixed new and existing categories correctly", () => {
+    const cats = [
+      { id: 10, parentId: 1 }, // existing
+      { id: 20, parentId: 1 }, // new
+    ]
+    const idMap = { 1: "root", 10: "existing", 20: "brand-new" }
+    const newlyCreatedIds = new Set(["brand-new"])
+    const updates = buildCategoryParentUpdates(cats, idMap, newlyCreatedIds)
+    expect(updates).toHaveLength(1)
+    expect(updates[0].id).toBe("brand-new")
+  })
+
+  it("returns empty array for empty cats list", () => {
+    expect(buildCategoryParentUpdates([], {}, new Set())).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Pure logic: buildCatsWithContent
+// ---------------------------------------------------------------------------
+// Bug fix: catsWithContent was including existing categories (idMap has both),
+// causing syncCategoryContentStep to overwrite manually edited content in Medusa.
+
+describe("buildCatsWithContent", () => {
+  it("returns content only for newly created categories", () => {
+    const cats = [
+      { id: 1, content: "<p>Hello</p>" },
+      { id: 2, content: "<p>World</p>" },
+    ]
+    const idMap = { 1: "medusa-existing", 2: "medusa-new" }
+    const newlyCreatedIds = new Set(["medusa-new"])
+    const result = buildCatsWithContent(cats, idMap, newlyCreatedIds)
+    expect(result).toEqual([{ medusaId: "medusa-new", content: "<p>World</p>" }])
+  })
+
+  it("does NOT return content for an existing category", () => {
+    const cats = [{ id: 1, content: "<p>Existing</p>" }]
+    const idMap = { 1: "medusa-existing" }
+    const newlyCreatedIds = new Set<string>() // existing, not newly created
+    expect(buildCatsWithContent(cats, idMap, newlyCreatedIds)).toHaveLength(0)
+  })
+
+  it("skips categories with no content", () => {
+    const cats = [{ id: 1, content: "" }, { id: 2 }]
+    const idMap = { 1: "m1", 2: "m2" }
+    const newlyCreatedIds = new Set(["m1", "m2"])
+    expect(buildCatsWithContent(cats, idMap, newlyCreatedIds)).toHaveLength(0)
+  })
+
+  it("skips categories not in idMap", () => {
+    const cats = [{ id: 99, content: "<p>Orphan</p>" }]
+    const idMap = {}
+    const newlyCreatedIds = new Set<string>()
+    expect(buildCatsWithContent(cats, idMap, newlyCreatedIds)).toHaveLength(0)
+  })
+
+  it("returns empty array when nothing newly created has content", () => {
+    expect(buildCatsWithContent([], {}, new Set())).toEqual([])
   })
 })
 
