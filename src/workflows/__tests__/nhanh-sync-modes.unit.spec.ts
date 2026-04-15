@@ -56,6 +56,30 @@ describe("buildSkuQuantityMapFromList", () => {
   it("handles an empty list without throwing", () => {
     expect(buildSkuQuantityMapFromList([])).toEqual({})
   })
+
+  it("preserves explicit 0 quantity (distinct from missing inventory field)", () => {
+    const items = [{ id: 5, parentId: 1, code: "ZERO-STOCK", inventory: { available: 0 } }]
+    expect(buildSkuQuantityMapFromList(items)).toEqual({ "ZERO-STOCK": 0 })
+  })
+
+  it("excludes group-header items (parentId = -2) to prevent overwriting variant inventory", () => {
+    // Bug scenario: group header shares a code with its variant child and arrives
+    // later in the list — without filtering it out, it would overwrite qty 8 → 0.
+    const items = [
+      { id: 10, parentId: 5,  code: "SHARED-CODE", inventory: { available: 8 } },
+      { id: 5,  parentId: -2, code: "SHARED-CODE" }, // group header, no inventory
+    ]
+    const map = buildSkuQuantityMapFromList(items)
+    expect(map["SHARED-CODE"]).toBe(8) // variant's quantity must survive
+  })
+
+  it("excludes group-header items even when they appear before the variant child", () => {
+    const items = [
+      { id: 5,  parentId: -2, code: "SHARED-CODE" },
+      { id: 10, parentId: 5,  code: "SHARED-CODE", inventory: { available: 3 } },
+    ]
+    expect(buildSkuQuantityMapFromList(items)).toEqual({ "SHARED-CODE": 3 })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -133,6 +157,13 @@ describe("filterNewProducts", () => {
     const products = [{ external_id: undefined, variants: [{ sku: "FRESH" }] }]
     const result = filterNewProducts(products, new Set(), new Set())
     expect(result).toHaveLength(1)
+  })
+
+  it("treats null external_id the same as undefined (skips ext-id check, uses SKU only)", () => {
+    const products = [{ external_id: null, variants: [{ sku: "KNOWN" }] }]
+    // null is falsy — ext-id check is skipped; SKU determines existence
+    expect(filterNewProducts(products, new Set(), new Set(["KNOWN"]))).toHaveLength(0)
+    expect(filterNewProducts(products, new Set(), new Set())).toHaveLength(1)
   })
 
   it("returns empty array when all products are known", () => {

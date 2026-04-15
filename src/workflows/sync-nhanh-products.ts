@@ -856,6 +856,11 @@ export const syncProductContentStep = createStep(
 export function buildSkuQuantityMapFromList(items: any[]): Record<string, number> {
     const map: Record<string, number> = {};
     for (const item of items) {
+        // Skip group headers (parentId = -2): they aggregate variants but hold no
+        // inventory themselves.  Their codes can collide with variant-child codes,
+        // and if a group header appears later in the list it would silently overwrite
+        // the variant's real quantity with 0.
+        if (Number(item.parentId) === -2) continue;
         const code = item.code ? String(item.code).trim() : "";
         if (!code) continue;
         map[code] = Number(item.inventory?.available) || 0;
