@@ -16,6 +16,26 @@ import { SearchQuerySchema } from "./store/search/validators"
 
 export default defineMiddlewares({
   routes: [
+    // Ensure payment_providers is always returned in region detail response.
+    // The Medusa admin UI sometimes fetches /admin/regions/:id without a
+    // fields param, which omits payment_providers from the default field set.
+    // Custom middlewares run AFTER the built-in validateAndTransformQuery,
+    // so we patch req.queryConfig.fields directly at this point.
+    {
+      matcher: "/admin/regions/:id",
+      method: "GET",
+      middlewares: [
+        (req: any, _res, next) => {
+          const queryConfig = req.queryConfig
+          if (queryConfig?.fields && !queryConfig.fields.includes("payment_providers.*")) {
+            queryConfig.fields = [...queryConfig.fields, "payment_providers.*"]
+            req.remoteQueryConfig = queryConfig
+          }
+          next()
+        },
+      ],
+    },
+
     {
       matcher: "/admin/brands",
       method: "POST",
