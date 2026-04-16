@@ -24,7 +24,7 @@ export const syncNhanhCategoriesStep = createStep("sync-nhanh-cats", async (inpu
    const productModule = container.resolve(Modules.PRODUCT);
 
    const idMap: Record<number, string> = {};
-   const toCreate: any[] = [];
+   let toCreate: any[] = [];
    const toUpdate: any[] = [];
 
    // Load all existing categories once for in-memory matching
@@ -89,18 +89,46 @@ export const syncNhanhCategoriesStep = createStep("sync-nhanh-cats", async (inpu
    }
 
    if (toCreate.length > 0) {
-       const created = await productModule.createProductCategories(toCreate);
-       created.forEach(c => {
-           // Map all Nhanh IDs that share this handle to the same Medusa category
-           const handle = c.handle;
-           if (handle && pendingHandles[handle]) {
-               pendingHandles[handle].forEach(nhanhId => {
-                   idMap[nhanhId] = c.id;
-               });
-           }
-       });
+       // Safety check: some categories may already exist in the DB even if the
+       // in-memory map missed them (handle mismatch between Nhanh code versions).
+       // Re-query by handle to avoid duplicate-handle constraint errors.
+       const handlesToCreate = toCreate.map((c: any) => c.handle);
+       const alreadyExisting = await productModule.listProductCategories(
+           { handle: handlesToCreate },
+           { select: ["id", "handle"], take: handlesToCreate.length + 1 }
+       );
+       if (alreadyExisting.length > 0) {
+           const existingByHandle: Record<string, any> = {};
+           alreadyExisting.forEach((c: any) => { existingByHandle[c.handle] = c; });
+           toCreate = toCreate.filter((cat: any) => {
+               if (existingByHandle[cat.handle]) {
+                   (pendingHandles[cat.handle] || []).forEach((nhanhId: number) => {
+                       idMap[nhanhId] = existingByHandle[cat.handle].id;
+                   });
+                   // Also queue an update so metadata.nhanh_id gets set
+                   toUpdate.push({
+                       id: existingByHandle[cat.handle].id,
+                       metadata: { ...existingByHandle[cat.handle].metadata, source: "nhanh", nhanh_id: pendingHandles[cat.handle]?.[0] ?? cat.metadata?.nhanh_id },
+                   });
+                   return false;
+               }
+               return true;
+           });
+       }
+
+       if (toCreate.length > 0) {
+           const created = await productModule.createProductCategories(toCreate);
+           created.forEach(c => {
+               const handle = c.handle;
+               if (handle && pendingHandles[handle]) {
+                   pendingHandles[handle].forEach(nhanhId => {
+                       idMap[nhanhId] = c.id;
+                   });
+               }
+           });
+       }
    }
-   
+
    if (toUpdate.length > 0) {
        for (const u of toUpdate) {
            const { id, ...data } = u;
@@ -352,7 +380,8 @@ export const fetchAndProcessNhanhProductsStep = createStep(
              prices: [
                 { amount: Number(detail.prices?.retail) || 0, currency_code: "vnd" }
              ],
-             options: { "Default": "Default" }
+             options: { "Default": "Default" },
+             metadata: { nhanh_id: detail.id }
           }];
           skuToQuantityMap[sku] = Number(detail.inventory?.available) || 0;
        } else {
@@ -418,7 +447,10 @@ export const fetchAndProcessNhanhProductsStep = createStep(
                 options: variantOptions,
                 // Variant image from Nhanh: images.avatar
                 thumbnail: c.images?.avatar || undefined,
-                metadata: c.images?.avatar ? { image_url: c.images.avatar } : undefined
+                metadata: {
+                   nhanh_id: c.id,
+                   ...(c.images?.avatar ? { image_url: c.images.avatar } : {})
+                }
              });
              
              skuToQuantityMap[sku] = Number(c.inventory?.available) || 0;
