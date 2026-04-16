@@ -15,7 +15,6 @@ export const CreateSeoMetadataSchema = z.object({
   og_description: z.string().optional(),
   og_image: safeUrl.optional(),
   canonical_url: safeUrl.optional(),
-  handle: z.string().optional(),
 })
 
 export type CreateSeoMetadataType = z.infer<typeof CreateSeoMetadataSchema>
@@ -28,7 +27,6 @@ export const UpdateSeoMetadataSchema = z.object({
   og_description: z.string().optional(),
   og_image: safeUrl.optional(),
   canonical_url: safeUrl.optional(),
-  handle: z.string().optional(),
 })
 
 export type UpdateSeoMetadataType = z.infer<typeof UpdateSeoMetadataSchema>

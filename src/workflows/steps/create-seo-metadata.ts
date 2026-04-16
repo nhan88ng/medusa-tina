@@ -10,7 +10,6 @@ type CreateSeoMetadataInput = {
   og_description?: string
   og_image?: string
   canonical_url?: string
-  handle?: string
 }
 
 export const createSeoMetadataStep = createStep(

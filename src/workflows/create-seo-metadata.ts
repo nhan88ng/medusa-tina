@@ -12,7 +12,6 @@ type CreateSeoMetadataWorkflowInput = {
   og_description?: string
   og_image?: string
   canonical_url?: string
-  handle?: string
 }
 
 export const createSeoMetadataWorkflow = createWorkflow(

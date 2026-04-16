@@ -9,7 +9,6 @@ const SeoMetadata = model.define("seo_metadata", {
   og_description: model.text().nullable(),
   og_image: model.text().nullable(),
   canonical_url: model.text().nullable(),
-  handle: model.text().searchable().nullable(),
 })
 
 export default SeoMetadata

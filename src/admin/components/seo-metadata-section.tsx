@@ -22,7 +22,6 @@ type SeoMetadata = {
   og_description: string | null
   og_image: string | null
   canonical_url: string | null
-  handle: string | null
 }
 
 type SeoFormData = {
@@ -33,7 +32,6 @@ type SeoFormData = {
   og_description: string
   og_image: string
   canonical_url: string
-  handle: string
 }
 
 const emptySeoForm: SeoFormData = {
@@ -44,7 +42,6 @@ const emptySeoForm: SeoFormData = {
   og_description: "",
   og_image: "",
   canonical_url: "",
-  handle: "",
 }
 
 type SeoMetadataSectionProps = {
@@ -83,7 +80,6 @@ const SeoMetadataSection = ({ entityType, entityId }: SeoMetadataSectionProps) =
         og_description: seo.og_description || "",
         og_image: seo.og_image || "",
         canonical_url: seo.canonical_url || "",
-        handle: seo.handle || "",
       })
     } else if (editing) {
       setFormData(emptySeoForm)
@@ -156,7 +152,6 @@ const SeoMetadataSection = ({ entityType, entityId }: SeoMetadataSectionProps) =
     { key: "meta_title", label: "Meta Title", type: "input" },
     { key: "meta_description", label: "Meta Description", type: "textarea" },
     { key: "meta_keywords", label: "Meta Keywords", type: "input" },
-    { key: "handle", label: "Handle (URL Slug)", type: "input" },
     { key: "canonical_url", label: "Canonical URL", type: "input" },
     { key: "og_title", label: "OG Title", type: "input" },
     { key: "og_description", label: "OG Description", type: "textarea" },

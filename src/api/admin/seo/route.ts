@@ -15,7 +15,7 @@ export const GET = async (
 
   const { data: seoMetadatas } = await query.graph({
     entity: "seo_metadata",
-    fields: ["id", "meta_title", "meta_description", "meta_keywords", "og_title", "og_description", "og_image", "canonical_url", "handle"],
+    fields: ["id", "meta_title", "meta_description", "meta_keywords", "og_title", "og_description", "og_image", "canonical_url"],
   })
 
   res.json({ seo_metadatas: seoMetadatas })
