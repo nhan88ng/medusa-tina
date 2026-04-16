@@ -248,9 +248,9 @@ medusa-tina/
 
 ## 12. Future Scope (not yet in progress)
 
-- Nhanh.vn **order push** (website order → Nhanh.vn). Currently only product pull exists.
 - Online payment gateways: VNPay, Momo.
 - Loyalty program, subscriptions — postponed (per Q2 2026 feature plan).
+- Nhanh.vn order status sync (Nhanh → Medusa) — currently push-only one-way.
 
 ---
 

@@ -1,76 +1,103 @@
-<p align="center">
-  <a href="https://www.medusajs.com">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://user-images.githubusercontent.com/59018053/229103275-b5e482bb-4601-46e6-8142-244f531cebdb.svg">
-    <source media="(prefers-color-scheme: light)" srcset="https://user-images.githubusercontent.com/59018053/229103726-e5b529a3-9b3f-4970-8a1f-c6af37f087bf.svg">
-    <img alt="Medusa logo" src="https://user-images.githubusercontent.com/59018053/229103726-e5b529a3-9b3f-4970-8a1f-c6af37f087bf.svg">
-    </picture>
-  </a>
-</p>
-<h1 align="center">
-  Medusa
-</h1>
+# Medusa Tina
 
-<h4 align="center">
-  <a href="https://docs.medusajs.com">Documentation</a> |
-  <a href="https://www.medusajs.com">Website</a>
-</h4>
+Headless e-commerce backend cho **TINA SHOP** — cửa hàng túi xách thời trang Việt Nam. Built on [Medusa v2](https://medusajs.com).
 
-<p align="center">
-  Building blocks for digital commerce
-</p>
-<p align="center">
-  <a href="https://github.com/medusajs/medusa/blob/master/CONTRIBUTING.md">
-    <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat" alt="PRs welcome!" />
-  </a>
-    <a href="https://www.producthunt.com/posts/medusa"><img src="https://img.shields.io/badge/Product%20Hunt-%231%20Product%20of%20the%20Day-%23DA552E" alt="Product Hunt"></a>
-  <a href="https://discord.gg/xpCwq3Kfn8">
-    <img src="https://img.shields.io/badge/chat-on%20discord-7289DA.svg" alt="Discord Chat" />
-  </a>
-  <a href="https://twitter.com/intent/follow?screen_name=medusajs">
-    <img src="https://img.shields.io/twitter/follow/medusajs.svg?label=Follow%20@medusajs" alt="Follow @medusajs" />
-  </a>
-</p>
+## Kiến trúc tổng thể
 
-## Compatibility
+```
+┌──────────────┐       ┌────────────────┐       ┌────────────┐
+│ Storefront   │──────>│  Medusa Tina   │<─────>│ Nhanh.vn   │
+│ (Next.js)    │       │  (this repo)   │       │ POS        │
+└──────────────┘       └────────────────┘       └────────────┘
+       │
+       └────────────────────> Strapi CMS (blog, pages)
+```
 
-This starter is compatible with versions >= 2 of `@medusajs/medusa`. 
+Repo này phụ trách: products, orders, customers, payment, admin dashboard, và 2-way sync với Nhanh.vn POS.
 
-## Getting Started
+**Không** phụ trách: blog/marketing content (Strapi), storefront UI (repo riêng), online payment gateway.
 
-Visit the [Quickstart Guide](https://docs.medusajs.com/learn/installation) to set up a server.
+## Yêu cầu
 
-Visit the [Docs](https://docs.medusajs.com/learn/installation#get-started) to learn more about our system requirements.
+- Node.js ≥ 20
+- PostgreSQL
+- Redis (optional trong dev, bắt buộc trong production)
+- MeiliSearch (cho tìm kiếm sản phẩm)
 
-## What is Medusa
+## Quick Start
 
-Medusa is a set of commerce modules and tools that allow you to build rich, reliable, and performant commerce applications without reinventing core commerce logic. The modules can be customized and used to build advanced ecommerce stores, marketplaces, or any product that needs foundational commerce primitives. All modules are open-source and freely available on npm.
+```bash
+# Cài đặt
+npm install
+cp .env.template .env   # điền các env vars
 
-Learn more about [Medusa’s architecture](https://docs.medusajs.com/learn/introduction/architecture) and [commerce modules](https://docs.medusajs.com/learn/fundamentals/modules/commerce-modules) in the Docs.
+# Database
+npx medusa db:migrate
+npm run seed            # seed regions + currencies (VND)
+npm run seed:vn         # seed catalog túi xách
 
-## Build with AI Agents
+# Tạo admin user
+npx medusa user -e admin@example.com -p <password>
 
-### Claude Code Plugin
+# Dev
+npm run dev             # backend: http://localhost:9000, admin: http://localhost:5173
+```
 
-If you use AI agents like Claude Code, check out the [medusa-dev Claude Code plugin](https://github.com/medusajs/medusa-claude-plugins).
+## Lệnh thường dùng
 
-### Other Agents
+```bash
+# Database
+npx medusa db:migrate
+npx medusa db:generate <ModuleName>
 
-If you use AI agents other than Claude Code, copy the [skills directory](https://github.com/medusajs/medusa-claude-plugins/tree/main/plugins/medusa-dev/skills) into your agent's relevant `skills` directory.
+# Test
+npm run test:unit
+npm run test:integration:http
+npm run test:integration:modules
 
-### MCP Server
+# Build production
+npm run build
+npm start
+```
 
-You can also add the MCP server `https://docs.medusajs.com/mcp` to your AI agents to answer questions related to Medusa. The `medusa-dev` Claude Code plugin includes this MCP server by default.
+## Custom modules
 
-## Community & Contributions
+| Module | Mục đích |
+|--------|----------|
+| `brand` | Thương hiệu sản phẩm |
+| `seo` | SEO metadata (title, description, OG) cho product/category/collection/brand |
+| `entity-content` | Nội dung HTML giàu (Tiptap) |
+| `email-template` | Email templates (Handlebars) quản lý từ admin |
+| `product-review` | Review + rating với moderation |
+| `wishlist` | Wishlist của customer |
+| `meilisearch` | Full-text search tiếng Việt |
+| `payment-cod` | Thanh toán khi nhận hàng |
+| `payment-bank-transfer` | Chuyển khoản thủ công, admin xác nhận |
+| `email-notification` | Gmail OAuth2 provider |
 
-The community and core team are available in [GitHub Discussions](https://github.com/medusajs/medusa/discussions), where you can ask for support, discuss roadmap, and share ideas.
+## Tích hợp Nhanh.vn
 
-Join our [Discord server](https://discord.com/invite/medusajs) to meet other community members.
+- **Product pull:** admin → `/admin/nhanh-sync` → kéo categories/brands/products về Medusa
+- **Order push:** khi `order.placed` → subscriber tự push sang Nhanh qua `/v3.0/order/add`
+- **Retry & override:** `POST /admin/orders/:id/nhanh-push` (admin UI widget)
 
-## Other channels
+Chi tiết: xem section "Nhanh.vn Integration" trong [CLAUDE.md](CLAUDE.md).
 
-- [GitHub Issues](https://github.com/medusajs/medusa/issues)
-- [Twitter](https://twitter.com/medusajs)
-- [LinkedIn](https://www.linkedin.com/company/medusajs)
-- [Medusa Blog](https://medusajs.com/blog/)
+## Deployment
+
+- Docker image build qua GitHub Actions → deploy Coolify trên VPS
+- File storage: Cloudflare R2 (S3-compatible) qua `S3_*` env vars
+- SSL database mặc định bật (set `DATABASE_SSL=false` để tắt)
+
+## Tài liệu
+
+| File | Nội dung |
+|------|----------|
+| [SPEC.md](SPEC.md) | Source of truth cho scope, domain model, boundaries |
+| [CLAUDE.md](CLAUDE.md) | Hướng dẫn cho AI agents (architecture overview) |
+| [STOREFRONT_INTEGRATION.md](STOREFRONT_INTEGRATION.md) | Store API reference cho storefront team |
+| [tasks/](tasks/) | Implementation plans (reference) |
+
+## License
+
+Private — TINA SHOP.
