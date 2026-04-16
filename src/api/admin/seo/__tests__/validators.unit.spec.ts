@@ -62,6 +62,31 @@ describe("CreateSeoMetadataSchema", () => {
   })
 })
 
+describe("CreateSeoMetadataSchema — handle removed", () => {
+  const base = { entity_type: "product" as const, entity_id: "prod_01" }
+
+  it("strips handle from parsed output (handle is no longer a schema field)", () => {
+    const result = CreateSeoMetadataSchema.safeParse({
+      ...base,
+      meta_title: "My Product",
+      handle: "my-product",
+    })
+    expect(result.success).toBe(true)
+    expect((result.data as Record<string, unknown>).handle).toBeUndefined()
+  })
+})
+
+describe("UpdateSeoMetadataSchema — handle removed", () => {
+  it("strips handle from parsed output (handle is no longer a schema field)", () => {
+    const result = UpdateSeoMetadataSchema.safeParse({
+      meta_title: "Updated Title",
+      handle: "some-handle",
+    })
+    expect(result.success).toBe(true)
+    expect((result.data as Record<string, unknown>).handle).toBeUndefined()
+  })
+})
+
 describe("UpdateSeoMetadataSchema", () => {
   it("rejects javascript: URL in og_image", () => {
     const result = UpdateSeoMetadataSchema.safeParse({
