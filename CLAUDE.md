@@ -89,7 +89,22 @@ Admin UI is English only. Vietnamese text only appears in storefront-facing cont
 
 ### Nhanh.vn Integration (`src/lib/nhanh.ts`, `src/api/admin/nhanh-sync/`)
 
-Integration with Nhanh.vn POS/inventory system for syncing products, categories, and brands. Uses `NHANH_APP_ID`, `NHANH_BUSINESS_ID`, `NHANH_ACCESS_TOKEN` env vars.
+Integration with Nhanh.vn POS/inventory system. Uses `NHANH_APP_ID`, `NHANH_BUSINESS_ID`, `NHANH_ACCESS_TOKEN` env vars.
+
+**Product sync (pull):** `src/workflows/sync-nhanh-products.ts` — pulls categories, brands, products from Nhanh. Each variant stores `metadata.nhanh_id` (Nhanh integer ID) for use in order push.
+
+**Order push (one-way):** When `order.placed` fires, `src/subscribers/order-placed-nhanh-push.ts` calls `src/workflows/push-nhanh-order.ts` to push the order to Nhanh via `POST /v3.0/order/add`.
+
+- **Idempotency:** Medusa `order.id` = Nhanh `appOrderId`. Nhanh deduplicates by `appId + appOrderId`.
+- **Metadata keys persisted on `order.metadata`:**
+  - `nhanh_order_id` — Nhanh integer order ID
+  - `nhanh_tracking_url` — carrier tracking URL from Nhanh
+  - `nhanh_push_status` — `"success"` | `"failed"` | `"pending"`
+  - `nhanh_pushed_at` — ISO timestamp of last push attempt
+  - `nhanh_error` — error message if push failed
+- **Carrier config:** `NHANH_DEFAULT_CARRIER_ID` + `NHANH_DEFAULT_SERVICE_ID` env vars. Admin can override per order via the retry widget.
+- **Address requirement:** Storefront must collect Nhanh location IDs and store them on `shipping_address.metadata` as `nhanh_city_id`, `nhanh_district_id`, `nhanh_ward_id`. Use `/store/vn-address/*` routes to populate dropdowns.
+- **Admin retry:** `POST /admin/orders/:id/nhanh-push` (body: `{ carrierOverride?, force? }`). Order detail widget at `src/admin/widgets/order-nhanh-push.tsx`.
 
 ### Key Configuration
 

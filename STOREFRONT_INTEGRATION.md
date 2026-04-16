@@ -702,16 +702,19 @@ type WishlistItem = {
 
 ## Vietnamese Address API
 
-Cascading dropdown để khách chọn địa chỉ VN (2 cấp: Tỉnh/TP → Phường/Xã).
+> **Breaking change (3-tier):** Routes now return Nhanh.vn integer IDs (`id: number`), not old province codes. The dropdown is now 3-tier: Province → District → Ward. Old 2-tier shape (`code`, `codename`) is gone.
+
+Cascading dropdown để khách chọn địa chỉ VN (3 cấp: Tỉnh/TP → Quận/Huyện → Phường/Xã). Data source là Nhanh.vn location API v1, cached in-memory 24h.
+
+Không cần header auth hay publishable key.
 
 ### Endpoints
 
 ```
 GET /store/vn-address/provinces
-GET /store/vn-address/wards?province_code={code}
+GET /store/vn-address/districts?provinceId={nhanhCityId}
+GET /store/vn-address/wards?districtId={nhanhDistrictId}
 ```
-
-Không cần header auth hay publishable key.
 
 ### Response format
 
@@ -719,50 +722,64 @@ Không cần header auth hay publishable key.
 // GET /store/vn-address/provinces
 {
   provinces: [
-    { code: "79", codename: "vn-sg", name: "Thành phố Hồ Chí Minh" },
-    { code: "01", codename: "vn-hn", name: "Thành phố Hà Nội" },
-    // ...63 tỉnh/TP
+    { id: 123, name: "Thành phố Hồ Chí Minh" },
+    { id: 124, name: "Thành phố Hà Nội" },
+    // ...
   ]
 }
 
-// GET /store/vn-address/wards?province_code=79
+// GET /store/vn-address/districts?provinceId=123
+{
+  districts: [
+    { id: 1442, name: "Quận 1" },
+    { id: 1443, name: "Quận 3" },
+    // ...
+  ]
+}
+
+// GET /store/vn-address/wards?districtId=1442
 {
   wards: [
-    { code: "26734", name: "Phường Tân Định" },
-    { code: "26740", name: "Phường Bến Nghé" },
-    // ...tất cả phường/xã của tỉnh đó
+    { id: 20001, name: "Phường Tân Định" },
+    { id: 20002, name: "Phường Đa Kao" },
+    // ...
   ]
 }
 ```
 
 ### Mapping vào Medusa address fields
 
+> **Quan trọng:** Phải lưu Nhanh integer IDs vào `shipping_address.metadata` — chúng được dùng khi push order sang Nhanh. Thiếu các IDs này, order push sẽ fail.
+
 ```typescript
 // Khi khách submit form địa chỉ, map như sau:
 const address = {
   country_code: "vn",
-  province: selectedProvince.codename,   // e.g. "vn-sg" — dùng cho shipping zone matching
-  city: selectedWard.name,               // e.g. "Phường Bến Nghé"
-  address_1: streetAddress,              // e.g. "123 Nguyễn Huệ"
-  postal_code: postalCode || "",
-  // Lưu code để tra cứu sau
+  province: selectedProvince.name,    // e.g. "Thành phố Hồ Chí Minh"
+  city: selectedWard.name,            // e.g. "Phường Tân Định"
+  address_1: streetAddress,           // e.g. "123 Nguyễn Huệ"
+  postal_code: "",
+  // REQUIRED for Nhanh order push:
   metadata: {
-    province_code: selectedProvince.code,
+    nhanh_city_id: selectedProvince.id,     // Nhanh province integer ID
+    nhanh_district_id: selectedDistrict.id, // Nhanh district integer ID
+    nhanh_ward_id: selectedWard.id,         // Nhanh ward integer ID
+    // Optional human-readable labels:
     province_name: selectedProvince.name,
-    ward_code: selectedWard.code,
+    district_name: selectedDistrict.name,
     ward_name: selectedWard.name,
   },
 }
 ```
 
-> **Quan trọng:** Trường `province` phải dùng `codename` (e.g. `"vn-sg"`) để Medusa matching đúng shipping zone TP.HCM. Nếu province là `"vn-sg"`, khách sẽ thấy cả Giao hàng tiêu chuẩn và Giao hàng hoả tốc. Tỉnh khác chỉ thấy Giao hàng tiêu chuẩn.
-
 ### Ví dụ React
 
 ```tsx
 const [provinces, setProvinces] = useState([])
+const [districts, setDistricts] = useState([])
 const [wards, setWards] = useState([])
 const [selectedProvince, setSelectedProvince] = useState(null)
+const [selectedDistrict, setSelectedDistrict] = useState(null)
 
 useEffect(() => {
   fetch("/store/vn-address/provinces")
@@ -772,8 +789,18 @@ useEffect(() => {
 
 const handleProvinceChange = async (province) => {
   setSelectedProvince(province)
+  setDistricts([])
   setWards([])
-  const res = await fetch(`/store/vn-address/wards?province_code=${province.code}`)
+  setSelectedDistrict(null)
+  const res = await fetch(`/store/vn-address/districts?provinceId=${province.id}`)
+  const data = await res.json()
+  setDistricts(data.districts)
+}
+
+const handleDistrictChange = async (district) => {
+  setSelectedDistrict(district)
+  setWards([])
+  const res = await fetch(`/store/vn-address/wards?districtId=${district.id}`)
   const data = await res.json()
   setWards(data.wards)
 }
